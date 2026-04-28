@@ -1,198 +1,176 @@
-// Stoa v0.0.3 — 파일시스템 기반 우체국.
+// Stoa v0.0.4 — 가장 기본.
 //
-// 세 번째 발: DB 자리에 파일시스템. 폴더 구조 자체가 데이터.
+// 세 원칙:
+//   1) 누가 누구에게 — from {name, address}, to [{name, address}, ...]
+//   2) 받고 주기      — POST로 받고, 각 수신자 address로 능동 push
+//   3) 쌓이기만       — INSERT만. DELETE/UPDATE 코드에 없음.
 //
-// Envelope schema:
-//   { from: {name, address},
-//     to:   [{name, address}, ...],
-//     content }
+// SQLite 두 테이블:
+//   letters     — 편지의 몸체 (id PK)
+//   recipients  — (letter_id, name, address) — 수신자별 row, 인덱스 있음
 //
-// 흐름:
-//   1) 입력 schema 검증 (validate_envelope)
-//   2) envelope 정규화 + msg_id 발급
-//   3) 수신자별 폴더에 사본 저장 (mailbox/<name>/<msg_id>.json + _index.jsonl)
-//   4) 마스터 로그 append (mailbox/_log.jsonl)
-//   5) 각 수신자 address로 Stoa가 능동 push (http.post_json)
-//
-// 파일시스템 구조:
-//   mailbox/
-//     _log.jsonl                ← append-only 모든 envelope (시간 순)
-//     <recipient>/
-//       _index.jsonl            ← 이 이름에게 온 msg_id 목록
-//       <msg_id>.json           ← envelope 사본
-//
-// 보안: name_is_safe로 path traversal 차단 (.. / \ : 등 거부).
+// 화사한 겉치레 없음. 검증은 필수 필드 + non-empty만.
 
 // ---------- env ----------
 
-fn get_mailbox_dir() -> Text {
-    r = perform env.read("STOA_MAILBOX_DIR")
-    if is_error(r) {
-        return "mailbox"
-    }
+fn get_db_file() -> Text {
+    r = perform env.read("STOA_DB_FILE")
+    if is_error(r) { return "stoa.db" }
     return trim(unwrap(r))
 }
 
-// ---------- safety ----------
+// ---------- schema ----------
 
-fn name_is_safe(name: Text) -> Boolean {
-    if name == "" { return false }
-    if name == "." { return false }
-    if name == ".." { return false }
-    if index_of(name, "..") >= 0 { return false }
-    if index_of(name, "/") >= 0 { return false }
-    if index_of(name, "\\") >= 0 { return false }
-    if index_of(name, ":") >= 0 { return false }
-    return true
+fn _init_db() -> Any {
+    db = get_db_file()
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS letters (id TEXT PRIMARY KEY, from_name TEXT NOT NULL, from_address TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS recipients (letter_id TEXT NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL, PRIMARY KEY (letter_id, name))")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_recipients_name ON recipients(name)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_letters_from ON letters(from_name)")
+    return None
 }
 
-// ---------- id minting ----------
+// ---------- ids ----------
 
 fn make_id() -> Text {
     ts = perform clock.now("unix")
     r = perform state.read("_msg_seq")
     seq = 0
-    if not is_error(r) {
-        seq = unwrap(r)
-    }
+    if not is_error(r) { seq = unwrap(r) }
     perform state.write("_msg_seq", seq + 1)
     return join(["msg_", ts, "_", to_text(seq)], "")
 }
 
 fn now_iso() -> Text {
     r = perform clock.now("iso")
-    if is_error(r) {
-        return ""
-    }
+    if is_error(r) { return "" }
     return unwrap(r)
 }
 
-// ---------- schema validation ----------
+// ---------- validation (minimal) ----------
+
+fn _check_str(record: Any, key: Text) -> Any {
+    v = get(record, key)
+    if v == None { return error(join([key, " required"], "")) }
+    if to_text(v) == "" { return error(join([key, " must be non-empty"], "")) }
+    return ok(v)
+}
 
 fn validate_envelope(body: Any) -> Any {
-    if body == None {
-        return error("body must be a JSON object")
-    }
+    if body == None { return error("body must be a JSON object") }
 
-    // from
     fr = get(body, "from")
-    if fr == None { return error("missing 'from'") }
-    fn_name_v = get(fr, "name")
-    fn_addr_v = get(fr, "address")
-    if fn_name_v == None or to_text(fn_name_v) == "" {
-        return error("from.name required (Text, non-empty)")
-    }
-    if fn_addr_v == None or to_text(fn_addr_v) == "" {
-        return error("from.address required (Text, non-empty)")
-    }
-    fn_name = to_text(fn_name_v)
-    if not name_is_safe(fn_name) {
-        return error(join(["unsafe from.name: ", fn_name], ""))
-    }
+    if fr == None { return error("from required") }
+    fn_n = _check_str(fr, "name")
+    if is_error(fn_n) { return fn_n }
+    fn_a = _check_str(fr, "address")
+    if is_error(fn_a) { return fn_a }
 
-    // to (list of {name, address})
     to_list = get(body, "to")
-    if to_list == None {
-        return error("missing 'to' (must be a list)")
-    }
-    if length(to_list) == 0 {
-        return error("'to' must have at least 1 recipient")
-    }
+    if to_list == None { return error("to required (list)") }
+    if length(to_list) == 0 { return error("to must have at least 1 recipient") }
 
     recipients = []
     for r in to_list {
-        rname_v = get(r, "name")
-        raddr_v = get(r, "address")
-        if rname_v == None or to_text(rname_v) == "" {
-            return error("recipient.name required (Text, non-empty)")
-        }
-        if raddr_v == None or to_text(raddr_v) == "" {
-            return error("recipient.address required (Text, non-empty)")
-        }
-        rname = to_text(rname_v)
-        if not name_is_safe(rname) {
-            return error(join(["unsafe recipient.name: ", rname], ""))
-        }
+        n = _check_str(r, "name")
+        if is_error(n) { return n }
+        a = _check_str(r, "address")
+        if is_error(a) { return a }
         recipients = append(recipients, make_record([
-            ["name", rname_v],
-            ["address", raddr_v]
+            ["name", unwrap(n)],
+            ["address", unwrap(a)]
         ]))
     }
 
-    // content
-    content_v = get(body, "content")
-    if content_v == None or to_text(content_v) == "" {
-        return error("content required (Text, non-empty)")
-    }
+    c = _check_str(body, "content")
+    if is_error(c) { return c }
 
     return ok(make_record([
-        ["from_name", fn_name_v],
-        ["from_address", fn_addr_v],
+        ["from_name", unwrap(fn_n)],
+        ["from_address", unwrap(fn_a)],
         ["recipients", recipients],
-        ["content", content_v]
+        ["content", unwrap(c)]
     ]))
 }
 
-// ---------- file operations ----------
+// ---------- INSERT only (no UPDATE / no DELETE in this file) ----------
 
-// Append a line to a file (read-modify-write — racy but adequate for v0.0.3
-// and trivial to swap for an `file.append` effect later).
-fn _append_line(path: Text, line: Text) -> Any {
-    existing = ""
-    r = perform file.read(path)
-    if not is_error(r) {
-        existing = unwrap(r)
-    }
-    return perform file.write(path, join([existing, line, "\n"], ""))
+fn db_insert_letter(msg_id: Text, from_name: Text, from_address: Text, content: Text, created_at: Text) -> Any {
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO letters (id, from_name, from_address, content, created_at) VALUES (?, ?, ?, ?, ?)",
+        [msg_id, from_name, from_address, content, created_at])
 }
 
-fn save_envelope_for_recipient(recipient_name: Text, msg_id: Text, envelope_json: Text) -> Any {
-    base = get_mailbox_dir()
-    msg_path = join([base, "/", recipient_name, "/", msg_id, ".json"], "")
-    perform file.write(msg_path, envelope_json)
-    idx_path = join([base, "/", recipient_name, "/_index.jsonl"], "")
-    return _append_line(idx_path, msg_id)
+fn db_insert_recipient(letter_id: Text, name: Text, address: Text) -> Any {
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO recipients (letter_id, name, address) VALUES (?, ?, ?)",
+        [letter_id, name, address])
 }
 
-fn append_master_log(envelope_json: Text) -> Any {
-    base = get_mailbox_dir()
-    return _append_line(join([base, "/_log.jsonl"], ""), envelope_json)
+// ---------- SELECT ----------
+
+fn _row_to_recipient(row: Any) -> Any {
+    return make_record([["name", row[0]], ["address", row[1]]])
 }
 
-fn read_envelope_from_disk(recipient_name: Text, msg_id: Text) -> Any {
-    base = get_mailbox_dir()
-    msg_path = join([base, "/", recipient_name, "/", msg_id, ".json"], "")
-    r = perform file.read(msg_path)
-    if is_error(r) { return None }
-    parsed = parse_json(unwrap(r))
-    if is_error(parsed) { return None }
-    return unwrap(parsed)
-}
-
-fn list_inbox_for(recipient_name: Text) -> [Any] {
-    base = get_mailbox_dir()
-    idx_path = join([base, "/", recipient_name, "/_index.jsonl"], "")
-    r = perform file.read(idx_path)
+fn db_load_recipients(letter_id: Text) -> [Any] {
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT name, address FROM recipients WHERE letter_id = ? ORDER BY rowid",
+        [letter_id])
     if is_error(r) { return [] }
-    text = unwrap(r)
-    ids = split(text, "\n")
-    msgs = []
-    for id_str in ids {
-        if id_str != "" {
-            env_obj = read_envelope_from_disk(recipient_name, id_str)
-            if env_obj != None {
-                msgs = append(msgs, env_obj)
-            }
-        }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, _row_to_recipient(row))
     }
-    return msgs
+    return out
+}
+
+fn _row_to_envelope(row: Any) -> Any {
+    msg_id = row[0]
+    return make_record([
+        ["id", msg_id],
+        ["from", make_record([["name", row[1]], ["address", row[2]]])],
+        ["to", db_load_recipients(msg_id)],
+        ["content", row[3]],
+        ["created_at", row[4]]
+    ])
+}
+
+fn db_get_letter(msg_id: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT id, from_name, from_address, content, created_at FROM letters WHERE id = ? LIMIT 1",
+        [msg_id])
+    if is_error(r) { return None }
+    rows = unwrap(r)
+    if length(rows) == 0 { return None }
+    return _row_to_envelope(rows[0])
+}
+
+fn db_inbox_for(name: Text, limit: Number) -> [Any] {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? ORDER BY l.rowid DESC LIMIT ?",
+        [name, limit])
+    if is_error(r) { return [] }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, _row_to_envelope(row))
+    }
+    return out
 }
 
 // ---------- active push ----------
 
-// Best-effort fan-out — Stoa가 각 수신자의 address로 envelope POST.
-// 실패는 silent (envelope은 이미 디스크에 저장됨; agent가 polling으로
-// 따라잡을 수 있음).
 fn push_to_recipients(recipients: [Any], envelope: Any) -> Any {
     delivered = 0
     failed = 0
@@ -205,10 +183,7 @@ fn push_to_recipients(recipients: [Any], envelope: Any) -> Any {
             delivered = delivered + 1
         }
     }
-    return make_record([
-        ["delivered", delivered],
-        ["failed", failed]
-    ])
+    return make_record([["delivered", delivered], ["failed", failed]])
 }
 
 // ---------- response helpers ----------
@@ -231,25 +206,32 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    body = join(["{\"status\":\"ok\",\"version\":\"0.0.3\"}"], "")
-    return json_ok(200, body)
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.4\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
     parsed = parse_json(req.body)
-    if is_error(parsed) {
-        return err_json(400, "invalid JSON body")
-    }
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
     body = unwrap(parsed)
 
-    validation = validate_envelope(body)
-    if is_error(validation) {
-        return err_json(400, unwrap_error(validation))
-    }
-    norm = unwrap(validation)
+    v = validate_envelope(body)
+    if is_error(v) { return err_json(400, unwrap_error(v)) }
+    norm = unwrap(v)
 
+    _init_db()
     msg_id = make_id()
     created_at = now_iso()
+
+    // INSERT only — code path has no UPDATE / no DELETE.
+    db_insert_letter(msg_id,
+        to_text(get(norm, "from_name")),
+        to_text(get(norm, "from_address")),
+        to_text(get(norm, "content")),
+        created_at)
+    for r in get(norm, "recipients") {
+        db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
+    }
+
     envelope = make_record([
         ["id", msg_id],
         ["from", make_record([
@@ -260,44 +242,24 @@ fn handle_post_message(req: Any) -> [Any] {
         ["content", get(norm, "content")],
         ["created_at", created_at]
     ])
-    enc = encode_json(envelope)
-    if is_error(enc) {
-        return err_json(500, "internal: envelope encode failed")
-    }
-    envelope_json = unwrap(enc)
 
-    // 1) 수신자별 폴더에 사본 저장
-    for r in get(norm, "recipients") {
-        rname = to_text(get(r, "name"))
-        save_envelope_for_recipient(rname, msg_id, envelope_json)
-    }
+    push = push_to_recipients(get(norm, "recipients"), envelope)
 
-    // 2) 마스터 로그
-    append_master_log(envelope_json)
-
-    // 3) 수신자 address로 능동 push (best-effort)
-    push_result = push_to_recipients(get(norm, "recipients"), envelope)
-
-    // Response: envelope + push result
-    response = make_record([
-        ["envelope", envelope],
-        ["push", push_result]
-    ])
+    response = make_record([["envelope", envelope], ["push", push]])
     return json_ok(201, msg_to_json(response))
 }
 
 fn handle_list_inbox(req: Any) -> [Any] {
     name_v = get(req.args, "to")
     if name_v == None or to_text(name_v) == "" {
-        return err_json(400, "?to=<recipient_name> required")
+        return err_json(400, "?to=<name> required")
     }
-    rname = to_text(name_v)
-    if not name_is_safe(rname) {
-        return err_json(400, "unsafe recipient name")
-    }
-    msgs = list_inbox_for(rname)
+    limit_v = get(req.args, "limit")
+    limit = 50
+    if limit_v != None { limit = to_number(limit_v) }
+    msgs = db_inbox_for(to_text(name_v), limit)
     body = make_record([
-        ["recipient", rname],
+        ["recipient", name_v],
         ["messages", msgs],
         ["count", length(msgs)]
     ])
@@ -305,36 +267,9 @@ fn handle_list_inbox(req: Any) -> [Any] {
 }
 
 fn handle_get_message(req: Any, msg_id: Text) -> [Any] {
-    // path에 폴더 정보 포함: /api/v1/messages/<recipient>/<msg_id>
-    // 단일 id로는 어느 폴더에 사본인지 모름. 우선 ?to=<recipient> kwarg로 path 통합.
-    rname_v = get(req.args, "to")
-    if rname_v == None or to_text(rname_v) == "" {
-        return err_json(400, "?to=<recipient> required for single fetch")
-    }
-    rname = to_text(rname_v)
-    if not name_is_safe(rname) {
-        return err_json(400, "unsafe recipient name")
-    }
-    env_obj = read_envelope_from_disk(rname, msg_id)
-    if env_obj == None {
-        return err_json(404, "message not found in that mailbox")
-    }
+    env_obj = db_get_letter(msg_id)
+    if env_obj == None { return err_json(404, "letter not found") }
     return json_ok(200, msg_to_json(env_obj))
-}
-
-// ---------- echo (kept) ----------
-
-fn handle_echo(req: Any) -> [Any] {
-    parsed = parse_json(req.body)
-    msg = ""
-    if not is_error(parsed) {
-        v = get(unwrap(parsed), "msg")
-        if v != None { msg = to_text(v) }
-    }
-    reply = "?"
-    if msg == "야" { reply = "호" }
-    body = join(["{\"reply\":\"", reply, "\"}"], "")
-    return json_ok(200, body)
 }
 
 // ---------- routing ----------
@@ -348,9 +283,6 @@ fn route(req: Any) -> [Any] {
     }
     if method == "GET" and path == "/api/v1/health" {
         return handle_health(req)
-    }
-    if method == "POST" and path == "/echo" {
-        return handle_echo(req)
     }
     if method == "POST" and path == "/api/v1/messages" {
         return handle_post_message(req)
@@ -367,7 +299,7 @@ fn route(req: Any) -> [Any] {
 
 evolve stoa {
     listen: 8090
-    effects: [http.respond, http.post_json, file.read, file.write, clock.now, state.read, state.write, env.read]
+    effects: [http.respond, http.post_json, db.execute, db.query, clock.now, state.read, state.write, env.read]
     metric: error_rate
     when request_received(req) {
         result = route(req)
