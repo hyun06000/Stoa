@@ -1,0 +1,50 @@
+// Stoa v0.0.1 — echo 서버 (첫 발).
+// "야" → "호".
+//
+// 한 발씩 가는 중. 이건 baseline — Railway에 살아있는 AIL evolve-server.
+// 다음 발에서 message board 본체를 얹는다.
+
+fn route(req: Any) -> [Any] {
+    method = req.method
+    path = req.path
+
+    if method == "GET" and path == "/" {
+        return [200, "text/plain", "stoa alive"]
+    }
+
+    if method == "GET" and path == "/api/v1/health" {
+        return [200, "application/json",
+                "{\"status\":\"ok\",\"version\":\"0.0.1\"}"]
+    }
+
+    if method == "POST" and path == "/echo" {
+        parsed = parse_json(req.body)
+        msg = ""
+        if not is_error(parsed) {
+            v = get(unwrap(parsed), "msg")
+            if v != None {
+                msg = to_text(v)
+            }
+        }
+        reply = "?"
+        if msg == "야" {
+            reply = "호"
+        }
+        body = join(["{\"reply\":\"", reply, "\"}"], "")
+        return [200, "application/json", body]
+    }
+
+    return [404, "application/json", "{\"error\":\"not found\"}"]
+}
+
+evolve stoa {
+    listen: 8090
+    effects: [http.respond]
+    metric: error_rate
+    when request_received(req) {
+        result = route(req)
+        perform http.respond(get(result, 0), get(result, 1), get(result, 2))
+    }
+    rollback_on: error_rate > 0.9
+    history: keep_last 50
+}
