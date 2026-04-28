@@ -1,0 +1,14 @@
+# Local AIL runtime artifacts
+.ail/
+__pycache__/
+*.pyc
+
+# Local mailbox / data (don't commit messages — they live on the server's volume)
+mailbox/
+*.db
+*.sqlite
+
+# Editor
+.DS_Store
+.vscode/
+.idea/
