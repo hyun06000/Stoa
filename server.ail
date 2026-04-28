@@ -1,8 +1,242 @@
-// Stoa v0.0.1 — echo 서버 (첫 발).
-// "야" → "호".
+// Stoa v0.0.2 — bidirectional message store.
+// "누가 누구에게" 보냈는지 from/to로 분명히 구분, append-only로 저장.
 //
-// 한 발씩 가는 중. 이건 baseline — Railway에 살아있는 AIL evolve-server.
-// 다음 발에서 message board 본체를 얹는다.
+// 두 번째 발: 에이전트→스토아, 스토아→에이전트, 에이전트→에이전트 셋 다
+// 같은 grammar로 흐른다. 발신자/수신자 이름은 자유 (운영자가 의미 부여).
+//
+// 데이터 모델: 두 테이블.
+//   messages    — 현재 상태 캐시 (id PK)
+//   message_log — append-only source of truth (seq AUTOINCREMENT)
+// "deletion is movement" — DELETE 없음, archive action으로 표현.
+
+// ---------- env ----------
+
+fn get_db_file() -> Text {
+    r = perform env.read("STOA_DB_FILE")
+    if is_error(r) {
+        return "messages.db"
+    }
+    return trim(unwrap(r))
+}
+
+// ---------- schema ----------
+
+fn _init_db() -> Any {
+    db = get_db_file()
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, from_name TEXT NOT NULL, to_name TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_name)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_messages_from ON messages(from_name)")
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS message_log (seq INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target_id TEXT NOT NULL, from_name TEXT, to_name TEXT, content TEXT, msg_created_at TEXT, logged_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_log_target ON message_log(target_id)")
+    return None
+}
+
+// ---------- id minting ----------
+
+fn make_id() -> Text {
+    ts = perform clock.now("unix")
+    r = perform state.read("_msg_seq")
+    seq = 0
+    if not is_error(r) {
+        seq = unwrap(r)
+    }
+    perform state.write("_msg_seq", seq + 1)
+    return join(["msg_", ts, "_", to_text(seq)], "")
+}
+
+fn now_iso() -> Text {
+    r = perform clock.now("iso")
+    if is_error(r) {
+        return ""
+    }
+    return unwrap(r)
+}
+
+// ---------- write paths (always go through log) ----------
+
+fn _log_create(msg_id: Text, from_name: Text, to_name: Text, content: Text, created_at: Text) -> Any {
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO message_log (action, target_id, from_name, to_name, content, msg_created_at, logged_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ["create", msg_id, from_name, to_name, content, created_at, now_iso()])
+}
+
+fn db_insert_message(msg_id: Text, from_name: Text, to_name: Text, content: Text, created_at: Text) -> Any {
+    _init_db()
+    _log_create(msg_id, from_name, to_name, content, created_at)
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO messages (id, from_name, to_name, content, created_at) VALUES (?, ?, ?, ?, ?)",
+        [msg_id, from_name, to_name, content, created_at])
+}
+
+// ---------- read paths ----------
+
+fn _row_to_msg(row: Any) -> Any {
+    return make_record([
+        ["id", row[0]],
+        ["from", row[1]],
+        ["to", row[2]],
+        ["content", row[3]],
+        ["created_at", row[4]]
+    ])
+}
+
+fn db_get_message(msg_id: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT id, from_name, to_name, content, created_at FROM messages WHERE id = ? LIMIT 1",
+        [msg_id])
+    if is_error(r) { return None }
+    rows = unwrap(r)
+    if length(rows) == 0 { return None }
+    return _row_to_msg(rows[0])
+}
+
+fn db_list_messages(from_filter: Any, to_filter: Any, limit: Number) -> Any {
+    _init_db()
+    db = get_db_file()
+    where = " WHERE 1=1"
+    params = []
+    if from_filter != None {
+        where = join([where, " AND from_name = ?"], "")
+        params = append(params, from_filter)
+    }
+    if to_filter != None {
+        where = join([where, " AND to_name = ?"], "")
+        params = append(params, to_filter)
+    }
+    sql = join([
+        "SELECT id, from_name, to_name, content, created_at FROM messages",
+        where,
+        " ORDER BY rowid DESC LIMIT ?"
+    ], "")
+    params = append(params, limit)
+    r = perform db.query(db, sql, params)
+    if is_error(r) { return [] }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, _row_to_msg(row))
+    }
+    return out
+}
+
+fn db_count_messages() -> Number {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db, "SELECT COUNT(*) FROM messages")
+    if is_error(r) { return 0 }
+    rows = unwrap(r)
+    if length(rows) == 0 { return 0 }
+    return rows[0][0]
+}
+
+// ---------- response helpers ----------
+
+fn json_ok(status: Number, body: Text) -> [Any] {
+    return [status, "application/json", body]
+}
+
+fn err_json(status: Number, message: Text) -> [Any] {
+    body = join(["{\"error\":\"", message, "\"}"], "")
+    return [status, "application/json", body]
+}
+
+fn msg_to_json(msg: Any) -> Text {
+    enc = encode_json(msg)
+    if is_error(enc) {
+        return "{}"
+    }
+    return unwrap(enc)
+}
+
+// ---------- handlers ----------
+
+fn handle_health(req: Any) -> [Any] {
+    body = join([
+        "{\"status\":\"ok\",\"version\":\"0.0.2\",\"messages_count\":",
+        to_text(db_count_messages()),
+        "}"
+    ], "")
+    return json_ok(200, body)
+}
+
+fn handle_post_message(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) {
+        return err_json(400, "invalid JSON body")
+    }
+    body = unwrap(parsed)
+    from_name = get(body, "from")
+    to_name = get(body, "to")
+    content = get(body, "content")
+    if from_name == None or to_name == None or content == None {
+        return err_json(400, "from / to / content all required")
+    }
+    msg_id = make_id()
+    created_at = now_iso()
+    db_insert_message(msg_id, to_text(from_name), to_text(to_name),
+                      to_text(content), created_at)
+    msg = make_record([
+        ["id", msg_id],
+        ["from", from_name],
+        ["to", to_name],
+        ["content", content],
+        ["created_at", created_at]
+    ])
+    return json_ok(201, msg_to_json(msg))
+}
+
+fn handle_list_messages(req: Any) -> [Any] {
+    from_filter = get(req.args, "from")
+    to_filter = get(req.args, "to")
+    limit_arg = get(req.args, "limit")
+    limit = 50
+    if limit_arg != None {
+        limit = to_number(limit_arg)
+    }
+    msgs = db_list_messages(from_filter, to_filter, limit)
+    body = make_record([
+        ["messages", msgs],
+        ["count", length(msgs)]
+    ])
+    return json_ok(200, msg_to_json(body))
+}
+
+fn handle_get_message(req: Any, msg_id: Text) -> [Any] {
+    msg = db_get_message(msg_id)
+    if msg == None {
+        return err_json(404, "message not found")
+    }
+    return json_ok(200, msg_to_json(msg))
+}
+
+// ---------- echo (kept from v0.0.1) ----------
+
+fn handle_echo(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    msg = ""
+    if not is_error(parsed) {
+        v = get(unwrap(parsed), "msg")
+        if v != None {
+            msg = to_text(v)
+        }
+    }
+    reply = "?"
+    if msg == "야" {
+        reply = "호"
+    }
+    body = join(["{\"reply\":\"", reply, "\"}"], "")
+    return json_ok(200, body)
+}
+
+// ---------- routing ----------
 
 fn route(req: Any) -> [Any] {
     method = req.method
@@ -11,40 +245,33 @@ fn route(req: Any) -> [Any] {
     if method == "GET" and path == "/" {
         return [200, "text/plain", "stoa alive"]
     }
-
     if method == "GET" and path == "/api/v1/health" {
-        return [200, "application/json",
-                "{\"status\":\"ok\",\"version\":\"0.0.1\"}"]
+        return handle_health(req)
     }
-
     if method == "POST" and path == "/echo" {
-        parsed = parse_json(req.body)
-        msg = ""
-        if not is_error(parsed) {
-            v = get(unwrap(parsed), "msg")
-            if v != None {
-                msg = to_text(v)
-            }
-        }
-        reply = "?"
-        if msg == "야" {
-            reply = "호"
-        }
-        body = join(["{\"reply\":\"", reply, "\"}"], "")
-        return [200, "application/json", body]
+        return handle_echo(req)
     }
-
-    return [404, "application/json", "{\"error\":\"not found\"}"]
+    if method == "POST" and path == "/api/v1/messages" {
+        return handle_post_message(req)
+    }
+    if method == "GET" and path == "/api/v1/messages" {
+        return handle_list_messages(req)
+    }
+    if method == "GET" and starts_with(path, "/api/v1/messages/") {
+        msg_id = slice(path, 17, length(path))
+        return handle_get_message(req, msg_id)
+    }
+    return err_json(404, "not found")
 }
 
 evolve stoa {
     listen: 8090
-    effects: [http.respond]
+    effects: [http.respond, db.execute, db.query, clock.now, state.read, state.write, env.read]
     metric: error_rate
     when request_received(req) {
         result = route(req)
         perform http.respond(get(result, 0), get(result, 1), get(result, 2))
     }
     rollback_on: error_rate > 0.9
-    history: keep_last 50
+    history: keep_last 100
 }
