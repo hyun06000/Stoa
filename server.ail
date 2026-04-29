@@ -230,6 +230,89 @@ fn notify_discord(envelope: Any) -> Any {
     return None
 }
 
+// ---------- Discord interactions (Discord → Stoa) ----------
+//
+// 디스코드 슬래시 커맨드가 도착하는 곳. Ed25519 서명 검증은 Python flask
+// before_request hook이 자동 처리 (DISCORD_PUBLIC_KEY env 필요).
+//
+// 등록한 슬래시 커맨드: /letter to:<name> message:<text>
+//   from = "hyun06000" (현 단계 단일 사용자 가정 — 이후 discord_id → name
+//   매핑으로 확장 가능)
+
+fn _discord_pong() -> [Any] {
+    return [200, "application/json", "{\"type\":1}"]
+}
+
+fn _discord_reply(text: Text) -> [Any] {
+    body = make_record([["type", 4], ["data", make_record([["content", text]])]])
+    return [200, "application/json", msg_to_json(body)]
+}
+
+fn _slash_options_get(options: Any, name: Text) -> Text {
+    if options == None { return "" }
+    for opt in options {
+        if to_text(get(opt, "name")) == name {
+            v = get(opt, "value")
+            if v != None { return to_text(v) }
+        }
+    }
+    return ""
+}
+
+fn handle_discord(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return [400, "text/plain", "bad JSON"] }
+    body = unwrap(parsed)
+
+    itype = get(body, "type")
+    if itype == 1 { return _discord_pong() }
+    if itype != 2 { return _discord_reply("(unsupported interaction type)") }
+
+    data = get(body, "data")
+    cmd = to_text(get(data, "name"))
+    options = get(data, "options")
+
+    if cmd == "letter" {
+        to_name = _slash_options_get(options, "to")
+        content = _slash_options_get(options, "message")
+        if to_name == "" or content == "" {
+            return _discord_reply("❌ to: 와 message: 둘 다 필요해.")
+        }
+        // recipient 주소 lookup
+        rcp = db_lookup(to_name)
+        if rcp == None {
+            return _discord_reply(join(["❌ '", to_name, "'은 registry에 없어. 먼저 enter하라고 알려줘."], ""))
+        }
+        // sender — 현재는 hyun06000 고정. 나중에 discord_id 매핑.
+        from_obj = make_record([
+            ["name", "hyun06000"],
+            ["address", "https://ail-stoa.up.railway.app/inbox/hyun06000"]
+        ])
+        recipients = [make_record([["name", get(rcp, "name")], ["address", get(rcp, "address")]])]
+        msg_id = make_id()
+        created_at = now_iso()
+        _init_db()
+        db_insert_letter(msg_id, "hyun06000", "https://ail-stoa.up.railway.app/inbox/hyun06000", content, created_at)
+        for r in recipients {
+            db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
+        }
+        envelope = make_record([
+            ["id", msg_id],
+            ["from", from_obj],
+            ["to", recipients],
+            ["content", content],
+            ["created_at", created_at]
+        ])
+        // mirror만 호출 — push는 생략 (디스코드는 3초 안에 응답해야 하는데
+        // push가 timeout으로 raise하면 슬래시 응답이 영영 안 나감). 수신자는
+        // 자기 인박스 폴링으로 가져감.
+        notify_discord(envelope)
+        return _discord_reply(join(["✉️ ", to_name, "에게 전송 — id: ", msg_id], ""))
+    }
+
+    return _discord_reply(join(["(unknown command: ", cmd, ")"], ""))
+}
+
 fn handle_debug_discord(req: Any) -> [Any] {
     url = get_discord_webhook()
     info = make_record([
@@ -350,7 +433,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.8\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.9\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
@@ -619,6 +702,9 @@ fn route(req: Any) -> [Any] {
     }
     if method == "GET" and path == "/api/v1/debug/discord" {
         return handle_debug_discord(req)
+    }
+    if method == "POST" and path == "/api/v1/discord" {
+        return handle_discord(req)
     }
     if method == "POST" and path == "/api/v1/enter" {
         return handle_enter(req)
