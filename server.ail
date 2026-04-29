@@ -31,6 +31,11 @@ fn _init_db() -> Any {
         "CREATE INDEX IF NOT EXISTS idx_recipients_name ON recipients(name)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_letters_from ON letters(from_name)")
+    // registry — 누가 어디서 듣고 있나. append-only, 같은 이름의 최신 행이 곧 현재 주소.
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS registry (name TEXT NOT NULL, address TEXT NOT NULL, registered_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_registry_name ON registry(name)")
     return None
 }
 
@@ -211,6 +216,47 @@ fn notify_discord(envelope: Any) -> Any {
     return None
 }
 
+// ---------- registry ----------
+//
+// 누가 어디서 듣고 있나. append-only — 같은 name의 최신 행이 현재 주소.
+// 보안 없음 (현 단계). 누구든 자기 이름과 주소를 등록할 수 있고, 같은 이름으로
+// 다시 등록하면 새 row가 쌓이고 latest가 곧 현재.
+
+fn db_register(name: Text, address: Text, ts: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO registry (name, address, registered_at) VALUES (?, ?, ?)",
+        [name, address, ts])
+}
+
+fn db_lookup(name: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT name, address, registered_at FROM registry WHERE name = ? ORDER BY rowid DESC LIMIT 1",
+        [name])
+    if is_error(r) { return None }
+    rows = unwrap(r)
+    if length(rows) == 0 { return None }
+    row = rows[0]
+    return make_record([["name", row[0]], ["address", row[1]], ["registered_at", row[2]]])
+}
+
+fn db_list_registry() -> [Any] {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT r.name, r.address, r.registered_at FROM registry r INNER JOIN (SELECT name, MAX(rowid) AS m FROM registry GROUP BY name) t ON r.rowid = t.m ORDER BY r.name",
+        [])
+    if is_error(r) { return [] }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, make_record([["name", row[0]], ["address", row[1]], ["registered_at", row[2]]]))
+    }
+    return out
+}
+
 // ---------- active push ----------
 
 fn push_to_recipients(recipients: [Any], envelope: Any) -> Any {
@@ -248,7 +294,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.4\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.5\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
@@ -315,6 +361,39 @@ fn handle_get_message(req: Any, msg_id: Text) -> [Any] {
     return json_ok(200, msg_to_json(env_obj))
 }
 
+// ---------- registry handlers ----------
+
+fn handle_register(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+
+    n = _check_str(body, "name")
+    if is_error(n) { return err_json(400, unwrap_error(n)) }
+    a = _check_str(body, "address")
+    if is_error(a) { return err_json(400, unwrap_error(a)) }
+
+    name = to_text(unwrap(n))
+    address = to_text(unwrap(a))
+    ts = now_iso()
+    db_register(name, address, ts)
+
+    body_out = make_record([["name", name], ["address", address], ["registered_at", ts]])
+    return json_ok(201, msg_to_json(body_out))
+}
+
+fn handle_list_registry(req: Any) -> [Any] {
+    items = db_list_registry()
+    body = make_record([["count", length(items)], ["agents", items]])
+    return json_ok(200, msg_to_json(body))
+}
+
+fn handle_lookup(req: Any, name: Text) -> [Any] {
+    item = db_lookup(name)
+    if item == None { return err_json(404, "name not registered") }
+    return json_ok(200, msg_to_json(item))
+}
+
 // ---------- routing ----------
 
 fn route(req: Any) -> [Any] {
@@ -336,6 +415,16 @@ fn route(req: Any) -> [Any] {
     if method == "GET" and starts_with(path, "/api/v1/messages/") {
         msg_id = slice(path, 17, length(path))
         return handle_get_message(req, msg_id)
+    }
+    if method == "POST" and path == "/api/v1/agents" {
+        return handle_register(req)
+    }
+    if method == "GET" and path == "/api/v1/agents" {
+        return handle_list_registry(req)
+    }
+    if method == "GET" and starts_with(path, "/api/v1/agents/") {
+        name = slice(path, 15, length(path))
+        return handle_lookup(req, name)
     }
     return err_json(404, "not found")
 }

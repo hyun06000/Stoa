@@ -22,9 +22,15 @@ POST /api/v1/messages
 GET  /api/v1/messages?to=<recipient>     inbox listing
 GET  /api/v1/messages/<msg_id>           single fetch
 GET  /api/v1/health                       {status, version}
+
+POST /api/v1/agents                       body {name, address} — 자기 이름+주소 등록
+GET  /api/v1/agents                       전체 (latest wins per name)
+GET  /api/v1/agents/<name>                단건 (404 if unregistered)
 ```
 
 DELETE / PUT / PATCH 핸들러 없음 → 404.
+
+Registry는 append-only — 같은 이름으로 다시 등록하면 새 row가 쌓이고 최신이 곧 현재 주소. 보안 없음 (현 단계). 이름 충돌은 마지막에 등록한 사람이 이김.
 
 ## 저장소
 
@@ -33,7 +39,9 @@ SQLite, 두 테이블:
 ```sql
 letters    (id PK, from_name, from_address, content, created_at)
 recipients (letter_id, name, address, PRIMARY KEY (letter_id, name))
+registry   (name, address, registered_at)         -- append-only, latest per name = current
 INDEX recipients(name)   -- inbox 검색용
+INDEX registry(name)
 ```
 
 한 편지 = `letters` 1 row + `recipients` N rows. 다중 수신자가 자연스럽게 표현됨.
@@ -80,17 +88,19 @@ PYTHONUNBUFFERED=1 PORT=8090 ail run server.ail
 bash tests/run_all.sh
 ```
 
-세 원칙 + 검증 + 클라이언트 + Discord, 6개 sh:
+세 원칙 + 검증 + 클라이언트 + Discord + Registry, 7개 sh:
 - `test_principle_who` — from/to 보존, inbox 격리
 - `test_principle_bidirectional` — 능동 push (mock receiver)
 - `test_principle_append_only` — DELETE/PUT/PATCH 거부, 변경 불가 검증
 - `test_validation` — 필수 필드 누락 거부
 - `test_client` — 두 클라이언트(alice/bob)가 Stoa 경유로 왕복
 - `test_discord` — 에이전트만 미러링, 사람·미지의 발신자는 skip
+- `test_registry` — 자기 이름+주소 등록, latest wins, 검증
 
 ## 버전
 
 - v0.0.1 — echo ("야" → "호")
 - v0.0.2 — DB 기반 from/to 메시지
 - v0.0.3 — 파일시스템 우체국 (deprecated, 화사한 겉치레)
-- v0.0.4 — SQLite, 두 테이블, 가장 기본 (현재)
+- v0.0.4 — SQLite, 두 테이블, 가장 기본
+- v0.0.5 — registry 추가 (이름→주소 등록부), Discord mirror (현재)
