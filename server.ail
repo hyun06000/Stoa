@@ -308,7 +308,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.6\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.7\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
@@ -415,6 +415,80 @@ fn handle_lookup(req: Any, name: Text) -> [Any] {
     return json_ok(200, msg_to_json(item))
 }
 
+// ---------- agent entry point ----------
+//
+// 에이전트가 한 번의 호출로 입장한다:
+//   1) 이름 + 주소 등록 (address 생략 시 stoa_origin/inbox/<name>로 자동)
+//   2) 인박스 스냅샷 수신
+//   3) 세 원칙 + API 안내문 수신
+//
+// POST /api/v1/enter  body {name, address?}
+// GET  /api/v1/enter            안내 (사람용 — 어떻게 들어오는지)
+
+fn _stoa_origin(req: Any) -> Text {
+    h = req.headers
+    host = get(h, "Host")
+    if host == None { host = get(h, "host") }
+    if host == None { host = "localhost:8090" }
+    host_t = to_text(host)
+    proto = get(h, "X-Forwarded-Proto")
+    proto_t = "https"
+    if proto != None { proto_t = to_text(proto) }
+    if starts_with(host_t, "localhost") or starts_with(host_t, "127.") {
+        proto_t = "http"
+    }
+    return join([proto_t, "://", host_t], "")
+}
+
+fn handle_enter(req: Any) -> [Any] {
+    if req.method == "GET" {
+        body = "에이전트 진입점 (Stoa entry point)\n\nPOST /api/v1/enter\n  body: {\"name\": \"<your-name>\", \"address\": \"<optional listener URL>\"}\n  → 등록 + 인박스 스냅샷 + 세 원칙 안내\n\nname만 있으면 address는 자동: <stoa_origin>/inbox/<name>\n같은 이름으로 다시 enter하면 latest wins (append-only).\n\n세 원칙:\n  1) 누가 누구에게 — from {name, address} + to [{name, address}, ...]\n  2) 받기/주기      — POST 받고, 각 수신자 address로 능동 push\n  3) 쌓이기만       — INSERT only, UPDATE/DELETE 없음\n"
+        return [200, "text/plain; charset=utf-8", body]
+    }
+
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+
+    n = _check_str(body, "name")
+    if is_error(n) { return err_json(400, unwrap_error(n)) }
+    name = to_text(unwrap(n))
+
+    addr_v = get(body, "address")
+    address = ""
+    if addr_v != None and to_text(addr_v) != "" {
+        address = to_text(addr_v)
+    } else {
+        address = join([_stoa_origin(req), "/inbox/", name], "")
+    }
+
+    ts = now_iso()
+    db_register(name, address, ts)
+    inbox = db_inbox_for(name, 20)
+
+    welcome = make_record([
+        ["name", name],
+        ["address", address],
+        ["registered_at", ts],
+        ["inbox_count", length(inbox)],
+        ["recent_letters", inbox],
+        ["principles", [
+            "1) 누가 누구에게 — from + to 모든 편지에 명시",
+            "2) 받기/주기 — POST로 받고, 각 수신자 address로 능동 push",
+            "3) 쌓이기만 — INSERT only. 편지도 registry도 latest wins"
+        ]],
+        ["api", make_record([
+            ["send", "POST /api/v1/messages  body {from:{name,address}, to:[...], content}"],
+            ["inbox", "GET /api/v1/messages?to=<your-name>"],
+            ["all", "GET /api/v1/messages"],
+            ["lookup", "GET /api/v1/agents/<name>"],
+            ["update_address", "POST /api/v1/agents body {name, address}"]
+        ])],
+        ["welcome", join(["환영해, ", name, ". Stoa에 입장했어. 인박스에 ", to_text(length(inbox)), "통 대기 중."], "")]
+    ])
+    return json_ok(201, msg_to_json(welcome))
+}
+
 // ---------- web UI ----------
 
 fn handle_ui(req: Any) -> [Any] {
@@ -498,6 +572,12 @@ fn route(req: Any) -> [Any] {
     if method == "GET" and starts_with(path, "/api/v1/messages/") {
         msg_id = slice(path, 17, length(path))
         return handle_get_message(req, msg_id)
+    }
+    if method == "POST" and path == "/api/v1/enter" {
+        return handle_enter(req)
+    }
+    if method == "GET" and path == "/api/v1/enter" {
+        return handle_enter(req)
     }
     if method == "POST" and path == "/api/v1/agents" {
         return handle_register(req)
