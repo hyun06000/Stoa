@@ -36,6 +36,11 @@ fn _init_db() -> Any {
         "CREATE TABLE IF NOT EXISTS registry (name TEXT NOT NULL, address TEXT NOT NULL, registered_at TEXT NOT NULL)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_registry_name ON registry(name)")
+    // discord_users — discord_id → stoa_name 매핑. append-only, latest wins.
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS discord_users (discord_id TEXT NOT NULL, stoa_name TEXT NOT NULL, bound_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_discord_users_id ON discord_users(discord_id)")
     return None
 }
 
@@ -230,6 +235,28 @@ fn notify_discord(envelope: Any) -> Any {
     return None
 }
 
+// ---------- Discord user mapping ----------
+
+fn db_bind_discord(discord_id: Text, stoa_name: Text, ts: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO discord_users (discord_id, stoa_name, bound_at) VALUES (?, ?, ?)",
+        [discord_id, stoa_name, ts])
+}
+
+fn db_lookup_discord(discord_id: Text) -> Text {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT stoa_name FROM discord_users WHERE discord_id = ? ORDER BY rowid DESC LIMIT 1",
+        [discord_id])
+    if is_error(r) { return "" }
+    rows = unwrap(r)
+    if length(rows) == 0 { return "" }
+    return to_text(rows[0][0])
+}
+
 // ---------- Discord interactions (Discord → Stoa) ----------
 //
 // 디스코드 슬래시 커맨드가 도착하는 곳. Ed25519 서명 검증은 Python flask
@@ -259,6 +286,36 @@ fn _slash_options_get(options: Any, name: Text) -> Text {
     return ""
 }
 
+fn _discord_user_id(body: Any) -> Text {
+    // Guild interaction에서는 member.user.id, DM에서는 user.id에 있음.
+    member = get(body, "member")
+    if member != None {
+        u = get(member, "user")
+        if u != None {
+            uid = get(u, "id")
+            if uid != None { return to_text(uid) }
+        }
+    }
+    u2 = get(body, "user")
+    if u2 != None {
+        uid2 = get(u2, "id")
+        if uid2 != None { return to_text(uid2) }
+    }
+    return ""
+}
+
+fn _resolve_sender(body: Any) -> Any {
+    discord_id = _discord_user_id(body)
+    stoa_name = ""
+    if discord_id != "" {
+        stoa_name = db_lookup_discord(discord_id)
+    }
+    if stoa_name == "" { return None }
+    rcp = db_lookup(stoa_name)
+    if rcp == None { return None }
+    return make_record([["name", get(rcp, "name")], ["address", get(rcp, "address")]])
+}
+
 fn handle_discord(req: Any) -> [Any] {
     parsed = parse_json(req.body)
     if is_error(parsed) { return [400, "text/plain", "bad JSON"] }
@@ -271,6 +328,40 @@ fn handle_discord(req: Any) -> [Any] {
     data = get(body, "data")
     cmd = to_text(get(data, "name"))
     options = get(data, "options")
+    discord_id = _discord_user_id(body)
+
+    if cmd == "enter" {
+        name = _slash_options_get(options, "name")
+        webhook = _slash_options_get(options, "webhook")
+        if name == "" {
+            return _discord_reply("❌ name: 이 필요해.")
+        }
+        if discord_id == "" {
+            return _discord_reply("❌ Discord 사용자 정보를 못 읽었어.")
+        }
+        address = webhook
+        if address == "" {
+            address = join(["https://ail-stoa.up.railway.app/inbox/", name], "")
+        }
+        ts = now_iso()
+        db_register(name, address, ts)
+        db_bind_discord(discord_id, name, ts)
+        return _discord_reply(join(["✅ '", name, "'으로 등록됐어. 이제 /letter 보내면 from이 너야.\n주소: ", address], ""))
+    }
+
+    if cmd == "whoami" {
+        if discord_id == "" {
+            return _discord_reply("❌ Discord 사용자 정보를 못 읽었어.")
+        }
+        bound = db_lookup_discord(discord_id)
+        if bound == "" {
+            return _discord_reply("👤 아직 등록 안 됨. /enter name:<원하는 이름> 으로 등록해줘.")
+        }
+        rcp = db_lookup(bound)
+        addr = "(registry에서 못 찾음)"
+        if rcp != None { addr = to_text(get(rcp, "address")) }
+        return _discord_reply(join(["👤 너는 Stoa에서 '", bound, "'\n주소: ", addr], ""))
+    }
 
     if cmd == "letter" {
         to_name = _slash_options_get(options, "to")
@@ -278,21 +369,23 @@ fn handle_discord(req: Any) -> [Any] {
         if to_name == "" or content == "" {
             return _discord_reply("❌ to: 와 message: 둘 다 필요해.")
         }
-        // recipient 주소 lookup
         rcp = db_lookup(to_name)
         if rcp == None {
-            return _discord_reply(join(["❌ '", to_name, "'은 registry에 없어. 먼저 enter하라고 알려줘."], ""))
+            return _discord_reply(join(["❌ '", to_name, "'은 registry에 없어."], ""))
         }
-        // sender — 현재는 hyun06000 고정. 나중에 discord_id 매핑.
-        from_obj = make_record([
-            ["name", "hyun06000"],
-            ["address", "https://ail-stoa.up.railway.app/inbox/hyun06000"]
-        ])
+        // sender — discord_id 매핑이 있으면 그걸로, 없으면 미등록 안내
+        from_obj = _resolve_sender(body)
+        if from_obj == None {
+            return _discord_reply("❌ 너 아직 Stoa에 미등록. 먼저 /enter name:<원하는 이름> 해줘.")
+        }
         recipients = [make_record([["name", get(rcp, "name")], ["address", get(rcp, "address")]])]
         msg_id = make_id()
         created_at = now_iso()
         _init_db()
-        db_insert_letter(msg_id, "hyun06000", "https://ail-stoa.up.railway.app/inbox/hyun06000", content, created_at)
+        db_insert_letter(msg_id,
+            to_text(get(from_obj, "name")),
+            to_text(get(from_obj, "address")),
+            content, created_at)
         for r in recipients {
             db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
         }
@@ -303,11 +396,9 @@ fn handle_discord(req: Any) -> [Any] {
             ["content", content],
             ["created_at", created_at]
         ])
-        // mirror만 호출 — push는 생략 (디스코드는 3초 안에 응답해야 하는데
-        // push가 timeout으로 raise하면 슬래시 응답이 영영 안 나감). 수신자는
-        // 자기 인박스 폴링으로 가져감.
+        // mirror만 — push는 timeout 위험 때문에 생략 (수신자는 폴러로 가져감)
         notify_discord(envelope)
-        return _discord_reply(join(["✉️ ", to_name, "에게 전송 — id: ", msg_id], ""))
+        return _discord_reply(join(["✉️ ", to_text(get(from_obj, "name")), " → ", to_name, " 전송 — id: ", msg_id], ""))
     }
 
     return _discord_reply(join(["(unknown command: ", cmd, ")"], ""))
@@ -463,7 +554,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.9\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.10\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
