@@ -53,7 +53,14 @@ INDEX registry(name)
 
 한 편지 = `letters` 1 row + `recipients` N rows. 다중 수신자가 자연스럽게 표현됨.
 
-`STOA_DB_FILE` env로 path override (기본: `stoa.db`).
+`STOA_DB_FILE` env로 path override.
+
+**기본 경로 우선순위:**
+1. `STOA_DB_FILE` env가 set + non-empty → 그 경로
+2. `RAILWAY_ENVIRONMENT_NAME` env가 set → `/data/messages.db` (Railway 볼륨 가정)
+3. 그 외 → `stoa.db` (cwd, 로컬 개발)
+
+Railway에 `/data` 볼륨 마운트했으면 자동으로 거기 저장. 볼륨 안 달면 write 실패로 시끄러워 — ephemeral fs에 쌓다가 재배포에 사라지는 것보다 안전.
 
 ## 검증 (필수 필드만)
 

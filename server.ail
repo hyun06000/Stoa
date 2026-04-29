@@ -15,8 +15,18 @@
 
 fn get_db_file() -> Text {
     r = perform env.read("STOA_DB_FILE")
-    if is_error(r) { return "stoa.db" }
-    return trim(unwrap(r))
+    if not is_error(r) {
+        v = trim(unwrap(r))
+        if v != "" { return v }
+    }
+    // Railway 환경 감지 — RAILWAY_ENVIRONMENT_NAME 있으면 /data 볼륨 가정.
+    // 볼륨 안 마운트 됐으면 write 실패해서 시끄럽게 알려주는 편이 조용히
+    // ephemeral fs에 쌓다가 재배포에 다 날아가는 것보다 안전.
+    re = perform env.read("RAILWAY_ENVIRONMENT_NAME")
+    if not is_error(re) {
+        if trim(unwrap(re)) != "" { return "/data/messages.db" }
+    }
+    return "stoa.db"
 }
 
 // ---------- schema ----------
