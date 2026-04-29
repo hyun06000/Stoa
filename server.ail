@@ -272,13 +272,36 @@ fn db_list_registry() -> [Any] {
 }
 
 // ---------- active push ----------
+//
+// 수신자 address가 Discord webhook URL이면 envelope을 Discord shape으로
+// reformat 후 POST. 그 외는 envelope을 그대로 POST (HEAAL — 받는 곳이 누구든
+// 보내는 쪽은 envelope 의미 보존).
+
+fn _is_discord_url(addr: Text) -> Boolean {
+    return starts_with(addr, "https://discord.com/api/webhooks/")
+}
+
+fn _envelope_to_discord(envelope: Any) -> Any {
+    from_name = to_text(get(get(envelope, "from"), "name"))
+    to_label = _to_label(get(envelope, "to"))
+    content = to_text(get(envelope, "content"))
+    text = join(["📨 **", from_name, "** → ", to_label, "\n", content], "")
+    return make_record([["content", text]])
+}
+
+fn _push_one(addr: Text, envelope: Any) -> Any {
+    if _is_discord_url(addr) {
+        return perform http.post_json(addr, _envelope_to_discord(envelope), [], timeout: 3)
+    }
+    return perform http.post_json(addr, envelope, [], timeout: 3)
+}
 
 fn push_to_recipients(recipients: [Any], envelope: Any) -> Any {
     delivered = 0
     failed = 0
     for r in recipients {
         addr = to_text(get(r, "address"))
-        resp = perform http.post_json(addr, envelope, [], timeout: 3)
+        resp = _push_one(addr, envelope)
         if is_error(resp) {
             failed = failed + 1
         } else {
@@ -308,7 +331,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.7\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.8\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
