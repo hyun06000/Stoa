@@ -387,8 +387,10 @@ fn handle_post_message(req: Any) -> [Any] {
         ["created_at", created_at]
     ])
 
-    push = push_to_recipients(get(norm, "recipients"), envelope)
+    // notify_discord 먼저 — push가 timeout으로 raise하면 핸들러가 500되어
+    // mirror가 영영 안 탐. mirror는 보존되어야 할 신호이므로 우선.
     notify_discord(envelope)
+    push = push_to_recipients(get(norm, "recipients"), envelope)
 
     response = make_record([["envelope", envelope], ["push", push]])
     return json_ok(201, msg_to_json(response))
