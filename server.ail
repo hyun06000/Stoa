@@ -230,6 +230,25 @@ fn notify_discord(envelope: Any) -> Any {
     return None
 }
 
+fn handle_debug_discord(req: Any) -> [Any] {
+    url = get_discord_webhook()
+    info = make_record([
+        ["env_set", url != ""],
+        ["env_length", length(url)],
+        ["env_prefix_ok", starts_with(url, "https://discord.com/api/webhooks/")]
+    ])
+    if url == "" {
+        body = make_record([["info", info], ["test", "skipped (no env)"]])
+        return json_ok(200, msg_to_json(body))
+    }
+    payload = make_record([["content", "🛠 stoa debug ping (handle_debug_discord)"]])
+    resp = perform http.post_json(url, payload, [], timeout: 5)
+    test_result = "ok"
+    if is_error(resp) { test_result = join(["error: ", to_text(resp)], "") }
+    body = make_record([["info", info], ["test", test_result]])
+    return json_ok(200, msg_to_json(body))
+}
+
 // ---------- registry ----------
 //
 // 누가 어디서 듣고 있나. append-only — 같은 name의 최신 행이 현재 주소.
@@ -595,6 +614,9 @@ fn route(req: Any) -> [Any] {
     if method == "GET" and starts_with(path, "/api/v1/messages/") {
         msg_id = slice(path, 17, length(path))
         return handle_get_message(req, msg_id)
+    }
+    if method == "GET" and path == "/api/v1/debug/discord" {
+        return handle_debug_discord(req)
     }
     if method == "POST" and path == "/api/v1/enter" {
         return handle_enter(req)
