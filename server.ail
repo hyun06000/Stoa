@@ -315,20 +315,50 @@ fn handle_discord(req: Any) -> [Any] {
 
 fn handle_debug_discord(req: Any) -> [Any] {
     url = get_discord_webhook()
-    info = make_record([
+    webhook_info = make_record([
         ["env_set", url != ""],
         ["env_length", length(url)],
         ["env_prefix_ok", starts_with(url, "https://discord.com/api/webhooks/")]
     ])
-    if url == "" {
-        body = make_record([["info", info], ["test", "skipped (no env)"]])
-        return json_ok(200, msg_to_json(body))
+
+    // Public Key 진단 — Discord Application Public Key는 정확히 64자 hex여야 함
+    pk_r = perform env.read("DISCORD_PUBLIC_KEY")
+    pk_set = not is_error(pk_r)
+    pk_len = 0
+    pk_preview = ""
+    pk_is_hex64 = false
+    if pk_set {
+        pk = trim(unwrap(pk_r))
+        pk_len = length(pk)
+        if pk_len >= 6 {
+            pk_preview = slice(pk, 0, 6)
+        }
+        pk_is_hex64 = pk_len == 64
     }
-    payload = make_record([["content", "🛠 stoa debug ping (handle_debug_discord)"]])
-    resp = perform http.post_json(url, payload, [], timeout: 5)
-    test_result = "ok"
-    if is_error(resp) { test_result = join(["error: ", to_text(resp)], "") }
-    body = make_record([["info", info], ["test", test_result]])
+    pk_info = make_record([
+        ["env_set", pk_set],
+        ["length", pk_len],
+        ["expected_length", 64],
+        ["length_ok", pk_is_hex64],
+        ["preview", pk_preview]
+    ])
+
+    test_result = "skipped (no webhook env)"
+    if url != "" {
+        payload = make_record([["content", "🛠 stoa debug ping"]])
+        resp = perform http.post_json(url, payload, [], timeout: 5)
+        if is_error(resp) {
+            test_result = join(["error: ", to_text(resp)], "")
+        } else {
+            test_result = "ok"
+        }
+    }
+
+    body = make_record([
+        ["webhook", webhook_info],
+        ["public_key", pk_info],
+        ["webhook_test", test_result]
+    ])
     return json_ok(200, msg_to_json(body))
 }
 
