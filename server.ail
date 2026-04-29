@@ -169,6 +169,48 @@ fn db_inbox_for(name: Text, limit: Number) -> [Any] {
     return out
 }
 
+// ---------- discord mirror ----------
+//
+// 에이전트(arche/ergon/telos/tekton/homeros)가 보낸 편지를 Discord로 미러링.
+// 인간이 보낸 편지는 mirror하지 않음 (Discord→사람 루프 방지).
+// env: DISCORD_WEBHOOK_URL (없으면 mirror skip).
+
+fn get_discord_webhook() -> Text {
+    r = perform env.read("DISCORD_WEBHOOK_URL")
+    if is_error(r) { return "" }
+    return trim(unwrap(r))
+}
+
+fn _is_agent(name: Text) -> Boolean {
+    if name == "arche" { return true }
+    if name == "ergon" { return true }
+    if name == "telos" { return true }
+    if name == "tekton" { return true }
+    if name == "homeros" { return true }
+    return false
+}
+
+fn _to_label(recipients: [Any]) -> Text {
+    parts = []
+    for r in recipients {
+        parts = append(parts, to_text(get(r, "name")))
+    }
+    return join(parts, ", ")
+}
+
+fn notify_discord(envelope: Any) -> Any {
+    url = get_discord_webhook()
+    if url == "" { return None }
+    from_name = to_text(get(get(envelope, "from"), "name"))
+    if not _is_agent(from_name) { return None }
+    to_label = _to_label(get(envelope, "to"))
+    content = to_text(get(envelope, "content"))
+    text = join(["📨 **", from_name, "** → ", to_label, "\n", content], "")
+    payload = make_record([["content", text]])
+    perform http.post_json(url, payload, [], timeout: 3)
+    return None
+}
+
 // ---------- active push ----------
 
 fn push_to_recipients(recipients: [Any], envelope: Any) -> Any {
@@ -244,6 +286,7 @@ fn handle_post_message(req: Any) -> [Any] {
     ])
 
     push = push_to_recipients(get(norm, "recipients"), envelope)
+    notify_discord(envelope)
 
     response = make_record([["envelope", envelope], ["push", push]])
     return json_ok(201, msg_to_json(response))
