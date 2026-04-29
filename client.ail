@@ -1,0 +1,156 @@
+// Stoa client.
+//
+// 세 가지 정체성:
+//   CLIENT_NAME    — 내 이름
+//   CLIENT_ADDRESS — Stoa가 나에게 push할 주소 (내가 듣고 있는 곳)
+//   STOA_URL       — 내가 편지를 보낼 Stoa 주소
+//
+// 두 동작:
+//   POST /send  body {to:[{name,address},...], content}
+//                → Stoa로 forward (from = {CLIENT_NAME, CLIENT_ADDRESS})
+//   POST /inbox body {envelope}
+//                → Stoa의 push 받음, 메모리에 쌓음
+//
+// 보조:
+//   GET /       — 내 정체 (name, address, stoa_url)
+//   GET /inbox  — 지금까지 받은 편지들
+//   GET /health — alive 확인
+
+// ---------- env ----------
+
+fn get_name() -> Text {
+    r = perform env.read("CLIENT_NAME")
+    if is_error(r) { return "anon" }
+    return trim(unwrap(r))
+}
+
+fn get_address() -> Text {
+    r = perform env.read("CLIENT_ADDRESS")
+    if is_error(r) { return "" }
+    return trim(unwrap(r))
+}
+
+fn get_stoa_url() -> Text {
+    r = perform env.read("STOA_URL")
+    if is_error(r) { return "http://localhost:8090" }
+    return trim(unwrap(r))
+}
+
+// ---------- json ----------
+
+fn to_json_text(obj: Any) -> Text {
+    enc = encode_json(obj)
+    if is_error(enc) { return "{}" }
+    return unwrap(enc)
+}
+
+// ---------- inbox storage ----------
+
+fn inbox_append(env_obj: Any) -> Any {
+    r = perform state.read("_inbox")
+    cur = []
+    if not is_error(r) { cur = unwrap(r) }
+    cur2 = append(cur, env_obj)
+    perform state.write("_inbox", cur2)
+    return None
+}
+
+fn inbox_list() -> [Any] {
+    r = perform state.read("_inbox")
+    if is_error(r) { return [] }
+    return unwrap(r)
+}
+
+// ---------- helpers ----------
+
+fn json_resp(code: Int, body: Any) -> [Any] {
+    return [code, "application/json", to_json_text(body)]
+}
+
+fn err(code: Int, msg: Text) -> [Any] {
+    return json_resp(code, make_record([["error", msg]]))
+}
+
+// ---------- handlers ----------
+
+fn handle_root(req: Any) -> [Any] {
+    body = make_record([
+        ["name", get_name()],
+        ["address", get_address()],
+        ["stoa_url", get_stoa_url()]
+    ])
+    return json_resp(200, body)
+}
+
+fn handle_health(req: Any) -> [Any] {
+    return json_resp(200, make_record([["status", "ok"], ["name", get_name()]]))
+}
+
+fn handle_get_inbox(req: Any) -> [Any] {
+    msgs = inbox_list()
+    body = make_record([["count", length(msgs)], ["messages", msgs]])
+    return json_resp(200, body)
+}
+
+fn handle_post_inbox(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err(400, "invalid JSON body") }
+    env_obj = unwrap(parsed)
+    inbox_append(env_obj)
+    return json_resp(200, make_record([["received", true]]))
+}
+
+fn handle_post_send(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err(400, "invalid JSON body") }
+    body = unwrap(parsed)
+
+    to_list = get(body, "to")
+    if to_list == None { return err(400, "to required") }
+    content = get(body, "content")
+    if content == None { return err(400, "content required") }
+
+    from_obj = make_record([
+        ["name", get_name()],
+        ["address", get_address()]
+    ])
+    payload = make_record([
+        ["from", from_obj],
+        ["to", to_list],
+        ["content", content]
+    ])
+
+    stoa = get_stoa_url()
+    url = join([stoa, "/api/v1/messages"], "")
+    resp = perform http.post_json(url, payload, [], timeout: 5)
+    if is_error(resp) {
+        return err(502, join(["stoa unreachable: ", to_text(resp)], ""))
+    }
+    return json_resp(200, make_record([["sent_to_stoa", true]]))
+}
+
+// ---------- routing ----------
+
+fn route(req: Any) -> [Any] {
+    method = req.method
+    path = req.path
+
+    if method == "GET" and path == "/" { return handle_root(req) }
+    if method == "GET" and path == "/health" { return handle_health(req) }
+    if method == "GET" and path == "/inbox" { return handle_get_inbox(req) }
+    if method == "POST" and path == "/inbox" { return handle_post_inbox(req) }
+    if method == "POST" and path == "/send" { return handle_post_send(req) }
+    return err(404, "not found")
+}
+
+evolve client {
+    listen: 9000
+    effects: [http.respond, http.post_json, state.read, state.write, env.read]
+    metric: error_rate
+    when request_received(req) {
+        result = route(req)
+        perform http.respond(get(result, 0), get(result, 1), get(result, 2))
+    }
+    rollback_on: error_rate > 0.9
+    history: keep_last 50
+}

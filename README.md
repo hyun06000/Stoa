@@ -56,17 +56,28 @@ PYTHONUNBUFFERED=1 PORT=8090 ail run server.ail
 # Railway: Procfile + nixpacks.toml로 자동 배포
 ```
 
+## 클라이언트
+
+`client.ail` — 테스트용 에이전트. 세 정체성을 env로 받음:
+
+- `CLIENT_NAME` — 내 이름
+- `CLIENT_ADDRESS` — Stoa가 나에게 push할 주소 (내가 듣는 곳)
+- `STOA_URL` — 내가 편지 보낼 Stoa
+
+엔드포인트: `GET /` 정체, `POST /send` Stoa로 forward, `POST /inbox` Stoa push 수신, `GET /inbox` 받은 편지.
+
 ## 테스트
 
 ```bash
 bash tests/run_all.sh
 ```
 
-세 원칙 + 검증, 4개 sh:
+세 원칙 + 검증 + 클라이언트, 5개 sh:
 - `test_principle_who` — from/to 보존, inbox 격리
 - `test_principle_bidirectional` — 능동 push (mock receiver)
 - `test_principle_append_only` — DELETE/PUT/PATCH 거부, 변경 불가 검증
 - `test_validation` — 필수 필드 누락 거부
+- `test_client` — 두 클라이언트(alice/bob)가 Stoa 경유로 왕복
 
 ## 버전
 
