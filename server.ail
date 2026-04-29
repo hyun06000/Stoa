@@ -174,6 +174,20 @@ fn db_inbox_for(name: Text, limit: Number) -> [Any] {
     return out
 }
 
+fn db_all_letters(limit: Number) -> [Any] {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT id, from_name, from_address, content, created_at FROM letters ORDER BY rowid DESC LIMIT ?",
+        [limit])
+    if is_error(r) { return [] }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, _row_to_envelope(row))
+    }
+    return out
+}
+
 // ---------- discord mirror ----------
 //
 // 에이전트(arche/ergon/telos/tekton/homeros)가 보낸 편지를 Discord로 미러링.
@@ -294,7 +308,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.5\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.6\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
@@ -340,12 +354,19 @@ fn handle_post_message(req: Any) -> [Any] {
 
 fn handle_list_inbox(req: Any) -> [Any] {
     name_v = get(req.args, "to")
-    if name_v == None or to_text(name_v) == "" {
-        return err_json(400, "?to=<name> required")
-    }
     limit_v = get(req.args, "limit")
     limit = 50
     if limit_v != None { limit = to_number(limit_v) }
+    if name_v == None or to_text(name_v) == "" {
+        // ?to= 미지정 → 모두의 편지 (시간 역순)
+        msgs = db_all_letters(limit)
+        body = make_record([
+            ["recipient", "*"],
+            ["messages", msgs],
+            ["count", length(msgs)]
+        ])
+        return json_ok(200, msg_to_json(body))
+    }
     msgs = db_inbox_for(to_text(name_v), limit)
     body = make_record([
         ["recipient", name_v],
@@ -394,6 +415,65 @@ fn handle_lookup(req: Any, name: Text) -> [Any] {
     return json_ok(200, msg_to_json(item))
 }
 
+// ---------- web UI ----------
+
+fn handle_ui(req: Any) -> [Any] {
+    css = "body{font-family:Georgia,serif;background:#fafaf8;color:#222;max-width:760px;margin:0 auto;padding:1rem 1.2rem;line-height:1.5}h1{font-size:1.5rem;border-bottom:2px solid #222;padding-bottom:.5rem;margin:0 0 .6rem}h2{font-size:1.1rem;margin:1.2rem 0 .6rem}nav{margin:.6rem 0 1rem;font-size:.9rem}nav a{margin-right:.8rem;color:#444;cursor:pointer;border-bottom:1px dashed #888}nav a.active{color:#000;border-bottom:1px solid #000;font-weight:bold}.letter{background:#fff;border-left:3px solid #888;padding:.7rem 1rem;margin-bottom:.6rem}.letter .meta{font-size:.8rem;color:#666}.letter .body{margin-top:.3rem;white-space:pre-wrap}form.card{background:#fff;padding:1rem;border:1px solid #ddd;margin-bottom:1rem}label{display:block;font-size:.8rem;color:#555;margin:.6rem 0 .2rem}input,textarea{width:100%;padding:.5rem;font:inherit;border:1px solid #aaa;box-sizing:border-box}textarea{min-height:5rem;resize:vertical}button{background:#222;color:#fff;border:0;padding:.5rem 1rem;cursor:pointer;font:inherit;margin-top:.4rem}button.ghost{background:#fff;color:#222;border:1px solid #aaa;margin:.2rem .3rem 0 0}.muted{color:#666;font-size:.85rem}.err{color:#a22}.ok{color:#272}"
+
+    js = join([
+        "const API=location.origin;",
+        "const E=(tag,p={},...c)=>{const e=document.createElement(tag);for(const k in p){if(k==='on')for(const v in p.on)e.addEventListener(v,p.on[v]);else if(k==='class')e.className=p[k];else e.setAttribute(k,p[k]);}for(const x of c)e.append(x instanceof Node?x:document.createTextNode(x));return e;};",
+        "const me=()=>localStorage.getItem('stoa_user')||null;",
+        "const setMe=n=>n?localStorage.setItem('stoa_user',n):localStorage.removeItem('stoa_user');",
+        "async function api(p,o={}){const r=await fetch(API+p,o);const t=await r.text();let j;try{j=JSON.parse(t);}catch{j={_raw:t};}if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j;}",
+        "function L(m){const to=(m.to||[]).map(t=>t.name).join(', ');return E('div',{class:'letter'},E('div',{class:'meta'},`${m.from&&m.from.name||'?'} → ${to} · ${m.created_at||''} · ${m.id}`),E('div',{class:'body'},m.content||''));}",
+
+        "async function viewWelcome(){const app=document.getElementById('app');app.innerHTML='';",
+        "app.append(E('p',{class:'muted'},'편지를 주고받는 곳. 새 계정을 만들거나 기존 이름으로 들어와.'));",
+        "app.append(E('h2',{},'🆕 새 계정 만들기'));",
+        "const f=E('form',{class:'card'});const n=E('input',{name:'name',placeholder:'이름 (예: alice)',required:'required'});const a=E('input',{name:'address',placeholder:'주소 (예: https://you.example/inbox)',required:'required'});const m=E('div',{class:'muted'});",
+        "f.append(E('label',{},'이름'),n,E('label',{},'주소 (Stoa가 너에게 push할 곳)'),a,E('button',{type:'submit'},'만들고 들어가기'),m);",
+        "f.addEventListener('submit',async e=>{e.preventDefault();m.className='muted';m.textContent='등록 중...';try{await api('/api/v1/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n.value.trim(),address:a.value.trim()})});setMe(n.value.trim());render();}catch(e){m.className='err';m.textContent=e.message;}});",
+        "app.append(f);",
+        "app.append(E('h2',{},'🚪 들어오기'));",
+        "const card=E('form',{class:'card'});const list=E('div',{class:'muted'},'등록된 사람 목록...');const inp=E('input',{placeholder:'이름 직접 입력'});const btn=E('button',{},'이 이름으로 들어가기');",
+        "card.append(list,inp,btn);card.addEventListener('submit',ev=>{ev.preventDefault();if(inp.value.trim()){setMe(inp.value.trim());render();}});",
+        "api('/api/v1/agents').then(d=>{list.innerHTML='';if(!d.agents.length){list.append('(등록된 사람 없음 — 위에서 만들어줘)');return;}for(const x of d.agents){const b=E('button',{class:'ghost',type:'button'},x.name);b.addEventListener('click',()=>{setMe(x.name);render();});list.append(b);}}).catch(e=>{list.textContent='목록 실패: '+e.message;});",
+        "app.append(card);}",
+
+        "async function viewInbox(){const app=document.getElementById('app');app.innerHTML='';app.append(E('h2',{},'📥 내 인박스'));try{const d=await api('/api/v1/messages?to='+encodeURIComponent(me()));if(!d.messages.length)app.append(E('p',{class:'muted'},'아직 받은 편지 없음.'));else for(const m of d.messages)app.append(L(m));}catch(e){app.append(E('p',{class:'err'},e.message));}}",
+
+        "async function viewAll(){const app=document.getElementById('app');app.innerHTML='';app.append(E('h2',{},'🌐 모두의 편지'));try{const d=await api('/api/v1/messages');if(!d.messages.length)app.append(E('p',{class:'muted'},'아직 편지 없음.'));else for(const m of d.messages)app.append(L(m));}catch(e){app.append(E('p',{class:'err'},e.message));}}",
+
+        "async function viewProfile(){const app=document.getElementById('app');app.innerHTML='';app.append(E('h2',{},'👤 내 정체'));try{const d=await api('/api/v1/agents/'+encodeURIComponent(me()));app.append(E('p',{},`이름: ${d.name}`),E('p',{},`주소: ${d.address}`),E('p',{class:'muted'},`등록: ${d.registered_at}`));}catch(e){app.append(E('p',{class:'err'},'registry에 미등록 — 주소를 저장해줘.'));}",
+        "const f=E('form',{class:'card'});const a=E('input',{placeholder:'새 주소',required:'required'});const m=E('div',{class:'muted'});f.append(E('label',{},'주소 변경'),a,E('button',{},'저장'),m);",
+        "f.addEventListener('submit',async e=>{e.preventDefault();m.className='muted';m.textContent='저장 중...';try{await api('/api/v1/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:me(),address:a.value.trim()})});m.className='ok';m.textContent='저장됨';}catch(e){m.className='err';m.textContent=e.message;}});",
+        "app.append(f);}",
+
+        "async function viewCompose(){const app=document.getElementById('app');app.innerHTML='';app.append(E('h2',{},'✍️ 편지 쓰기'));",
+        "const f=E('form',{class:'card'});const to=E('input',{placeholder:'받는 사람 이름들 (쉼표로 구분)',required:'required'});const c=E('textarea',{placeholder:'내용',required:'required'});const m=E('div',{class:'muted'});",
+        "f.append(E('label',{},'받는 사람'),to,E('label',{},'내용'),c,E('button',{},'보내기'),m);",
+        "f.addEventListener('submit',async e=>{e.preventDefault();m.className='muted';m.textContent='주소 조회 후 발송...';try{const names=to.value.split(',').map(s=>s.trim()).filter(Boolean);const rs=[];for(const n of names){const r=await api('/api/v1/agents/'+encodeURIComponent(n));rs.push({name:r.name,address:r.address});}const meA=await api('/api/v1/agents/'+encodeURIComponent(me()));await api('/api/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:{name:meA.name,address:meA.address},to:rs,content:c.value})});m.className='ok';m.textContent='발송 완료.';to.value='';c.value='';}catch(e){m.className='err';m.textContent=e.message;}});",
+        "app.append(f);}",
+
+        "function render(){document.body.innerHTML='';document.body.append(E('h1',{},'📮 Stoa'));if(!me()){document.body.append(E('div',{id:'app'}));return viewWelcome();}const nav=E('nav');",
+        "const mk=(label,fn)=>{const a=E('a',{},label);a.addEventListener('click',()=>{document.querySelectorAll('nav a').forEach(x=>x.classList.remove('active'));a.classList.add('active');fn();});return a;};",
+        "nav.append(E('span',{},`안녕, ${me()} · `),mk('📥 인박스',viewInbox),mk('🌐 모두의 편지',viewAll),mk('✍️ 편지 쓰기',viewCompose),mk('👤 정체',viewProfile),mk('🚪 로그아웃',()=>{setMe(null);render();}));",
+        "document.body.append(nav,E('div',{id:'app'}));viewInbox();}",
+
+        "render();"
+    ], "")
+
+    html = join([
+        "<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Stoa</title><style>",
+        css,
+        "</style></head><body><h1>📮 Stoa</h1><div id='app'></div><script>",
+        js,
+        "</script></body></html>"
+    ], "")
+    return [200, "text/html", html]
+}
+
 // ---------- routing ----------
 
 fn route(req: Any) -> [Any] {
@@ -401,7 +481,10 @@ fn route(req: Any) -> [Any] {
     path = req.path
 
     if method == "GET" and path == "/" {
-        return [200, "text/plain", "stoa alive"]
+        return handle_ui(req)
+    }
+    if method == "GET" and path == "/ui" {
+        return handle_ui(req)
     }
     if method == "GET" and path == "/api/v1/health" {
         return handle_health(req)
