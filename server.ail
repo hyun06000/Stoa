@@ -359,6 +359,42 @@ fn handle_discord(req: Any) -> [Any] {
         return _discord_reply(join(["✅ '", name, "'으로 등록됐어. 이제 /letter 보내면 from이 너야.\n주소: ", address], ""))
     }
 
+    if cmd == "status" {
+        _init_db()
+        db = get_db_file()
+        // 전체 편지 수
+        r1 = perform db.query(db, "SELECT COUNT(*) FROM letters", [])
+        total_letters = 0
+        if not is_error(r1) {
+            rows = unwrap(r1)
+            if length(rows) > 0 { total_letters = to_number(rows[0][0]) }
+        }
+        // 등록된 사람 수 (latest per name)
+        r2 = perform db.query(db, "SELECT COUNT(DISTINCT name) FROM registry", [])
+        total_agents = 0
+        if not is_error(r2) {
+            rows2 = unwrap(r2)
+            if length(rows2) > 0 { total_agents = to_number(rows2[0][0]) }
+        }
+        // 내 정체 + 인박스
+        my_line = "(미등록)"
+        if discord_id != "" {
+            my_name = db_lookup_discord(discord_id)
+            if my_name != "" {
+                my_inbox = db_inbox_for(my_name, 100)
+                my_line = join([my_name, " — 인박스 ", to_text(length(my_inbox)), "통"], "")
+            }
+        }
+        text = join([
+            "🏛 Stoa 상태\n",
+            "  • 전체 편지: ", to_text(total_letters), "\n",
+            "  • 등록된 이름: ", to_text(total_agents), "\n",
+            "  • 너: ", my_line, "\n",
+            "  • 버전: 0.0.11"
+        ], "")
+        return _discord_reply(text)
+    }
+
     if cmd == "whoami" {
         if discord_id == "" {
             return _discord_reply("❌ Discord 사용자 정보를 못 읽었어.")
@@ -564,7 +600,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.10\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.11\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
