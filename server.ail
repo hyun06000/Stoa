@@ -478,14 +478,16 @@ fn handle_discord(req: Any) -> [Any] {
     }
 
     if cmd == "letter" {
-        to_name = _slash_options_get(options, "to")
+        to_input = _slash_options_get(options, "to")
         content = _slash_options_get(options, "message")
-        if to_name == "" or content == "" {
+        if to_input == "" or content == "" {
             return _discord_reply("❌ to: 와 message: 둘 다 필요해.")
         }
+        // alias → canonical 해소 후 lookup
+        to_name = resolve_name(to_input)
         rcp = db_lookup(to_name)
         if rcp == None {
-            return _discord_reply(join(["❌ '", to_name, "'은 registry에 없어."], ""))
+            return _discord_reply(join(["❌ '", to_input, "'은 registry에 없어."], ""))
         }
         // sender — discord_id 매핑이 있으면 그걸로, 없으면 미등록 안내
         from_obj = _resolve_sender(body)
@@ -674,7 +676,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.13\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.14\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
