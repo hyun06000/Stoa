@@ -51,6 +51,12 @@ fn _init_db() -> Any {
         "CREATE TABLE IF NOT EXISTS discord_users (discord_id TEXT NOT NULL, stoa_name TEXT NOT NULL, bound_at TEXT NOT NULL)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_discord_users_id ON discord_users(discord_id)")
+    // aliases — alias → canonical 매핑. append-only, latest wins.
+    // 예: "에르곤" → "ergon"
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS aliases (alias TEXT NOT NULL, canonical TEXT NOT NULL, bound_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(alias)")
     return None
 }
 
@@ -245,6 +251,54 @@ fn notify_discord(envelope: Any) -> Any {
     return None
 }
 
+// ---------- aliases ----------
+//
+// alias → canonical 매핑. registry는 canonical만 알고, alias는 입력
+// 단계에서 해소된다. 예: "에르곤" → "ergon".
+
+fn db_add_alias(alias: Text, canonical: Text, ts: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO aliases (alias, canonical, bound_at) VALUES (?, ?, ?)",
+        [alias, canonical, ts])
+}
+
+fn db_resolve_alias(name: Text) -> Text {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT canonical FROM aliases WHERE alias = ? ORDER BY rowid DESC LIMIT 1",
+        [name])
+    if is_error(r) { return "" }
+    rows = unwrap(r)
+    if length(rows) == 0 { return "" }
+    return to_text(rows[0][0])
+}
+
+fn resolve_name(name: Text) -> Text {
+    // 직접 registry에 있으면 그대로, 없으면 alias 시도
+    direct = db_lookup(name)
+    if direct != None { return name }
+    canon = db_resolve_alias(name)
+    if canon != "" { return canon }
+    return name
+}
+
+fn db_list_aliases() -> [Any] {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT a.alias, a.canonical, a.bound_at FROM aliases a INNER JOIN (SELECT alias, MAX(rowid) AS m FROM aliases GROUP BY alias) t ON a.rowid = t.m ORDER BY a.alias",
+        [])
+    if is_error(r) { return [] }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, make_record([["alias", row[0]], ["canonical", row[1]], ["bound_at", row[2]]]))
+    }
+    return out
+}
+
 // ---------- Discord user mapping ----------
 
 fn db_bind_discord(discord_id: Text, stoa_name: Text, ts: Text) -> Any {
@@ -357,6 +411,20 @@ fn handle_discord(req: Any) -> [Any] {
         db_register(name, address, ts)
         db_bind_discord(discord_id, name, ts)
         return _discord_reply(join(["✅ '", name, "'으로 등록됐어. 이제 /letter 보내면 from이 너야.\n주소: ", address], ""))
+    }
+
+    if cmd == "alias" {
+        alias_v = _slash_options_get(options, "alias")
+        for_v = _slash_options_get(options, "for")
+        if alias_v == "" or for_v == "" {
+            return _discord_reply("❌ alias: 와 for: 둘 다 필요해.")
+        }
+        if db_lookup(for_v) == None {
+            return _discord_reply(join(["❌ '", for_v, "'은 registry에 미등록 — 먼저 그 사람이 /enter 해야 해."], ""))
+        }
+        ts = now_iso()
+        db_add_alias(alias_v, for_v, ts)
+        return _discord_reply(join(["🔗 '", alias_v, "' → '", for_v, "' 등록 완료. 이제 /letter to:", alias_v, " 로 보내도 돼."], ""))
     }
 
     if cmd == "status" {
@@ -606,7 +674,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.12\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.13\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
@@ -622,13 +690,28 @@ fn handle_post_message(req: Any) -> [Any] {
     msg_id = make_id()
     created_at = now_iso()
 
+    // recipients: alias → canonical 해소. address도 registry 기준으로 갱신
+    // (사용자가 alias 적었을 때 latest canonical address로 보내도록).
+    resolved_recipients = []
+    for r in get(norm, "recipients") {
+        rname = to_text(get(r, "name"))
+        canon = resolve_name(rname)
+        addr = to_text(get(r, "address"))
+        canon_entry = db_lookup(canon)
+        if canon_entry != None {
+            addr = to_text(get(canon_entry, "address"))
+        }
+        resolved_recipients = append(resolved_recipients,
+            make_record([["name", canon], ["address", addr]]))
+    }
+
     // INSERT only — code path has no UPDATE / no DELETE.
     db_insert_letter(msg_id,
         to_text(get(norm, "from_name")),
         to_text(get(norm, "from_address")),
         to_text(get(norm, "content")),
         created_at)
-    for r in get(norm, "recipients") {
+    for r in resolved_recipients {
         db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
     }
 
@@ -638,7 +721,7 @@ fn handle_post_message(req: Any) -> [Any] {
             ["name", get(norm, "from_name")],
             ["address", get(norm, "from_address")]
         ])],
-        ["to", get(norm, "recipients")],
+        ["to", resolved_recipients],
         ["content", get(norm, "content")],
         ["created_at", created_at]
     ])
@@ -646,7 +729,7 @@ fn handle_post_message(req: Any) -> [Any] {
     // notify_discord 먼저 — push가 timeout으로 raise하면 핸들러가 500되어
     // mirror가 영영 안 탐. mirror는 보존되어야 할 신호이므로 우선.
     notify_discord(envelope)
-    push = push_to_recipients(get(norm, "recipients"), envelope)
+    push = push_to_recipients(resolved_recipients, envelope)
 
     response = make_record([["envelope", envelope], ["push", push]])
     return json_ok(201, msg_to_json(response))
@@ -667,9 +750,10 @@ fn handle_list_inbox(req: Any) -> [Any] {
         ])
         return json_ok(200, msg_to_json(body))
     }
-    msgs = db_inbox_for(to_text(name_v), limit)
+    canonical = resolve_name(to_text(name_v))
+    msgs = db_inbox_for(canonical, limit)
     body = make_record([
-        ["recipient", name_v],
+        ["recipient", canonical],
         ["messages", msgs],
         ["count", length(msgs)]
     ])
@@ -710,9 +794,38 @@ fn handle_list_registry(req: Any) -> [Any] {
 }
 
 fn handle_lookup(req: Any, name: Text) -> [Any] {
-    item = db_lookup(name)
+    canonical = resolve_name(name)
+    item = db_lookup(canonical)
     if item == None { return err_json(404, "name not registered") }
     return json_ok(200, msg_to_json(item))
+}
+
+// ---------- alias handlers ----------
+
+fn handle_add_alias(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+    a = _check_str(body, "alias")
+    if is_error(a) { return err_json(400, unwrap_error(a)) }
+    c = _check_str(body, "canonical")
+    if is_error(c) { return err_json(400, unwrap_error(c)) }
+    alias = to_text(unwrap(a))
+    canonical = to_text(unwrap(c))
+    // canonical이 registry에 있어야 함 — 유령 alias 방지
+    if db_lookup(canonical) == None {
+        return err_json(400, join(["canonical '", canonical, "' is not registered"], ""))
+    }
+    ts = now_iso()
+    db_add_alias(alias, canonical, ts)
+    body_out = make_record([["alias", alias], ["canonical", canonical], ["bound_at", ts]])
+    return json_ok(201, msg_to_json(body_out))
+}
+
+fn handle_list_aliases(req: Any) -> [Any] {
+    items = db_list_aliases()
+    body = make_record([["count", length(items)], ["aliases", items]])
+    return json_ok(200, msg_to_json(body))
 }
 
 // ---------- agent entry point ----------
@@ -887,6 +1000,12 @@ fn route(req: Any) -> [Any] {
     }
     if method == "POST" and path == "/api/v1/agents" {
         return handle_register(req)
+    }
+    if method == "POST" and path == "/api/v1/aliases" {
+        return handle_add_alias(req)
+    }
+    if method == "GET" and path == "/api/v1/aliases" {
+        return handle_list_aliases(req)
     }
     if method == "GET" and path == "/api/v1/agents" {
         return handle_list_registry(req)
