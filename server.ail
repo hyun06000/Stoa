@@ -181,12 +181,19 @@ fn db_get_letter(msg_id: Text) -> Any {
     return _row_to_envelope(rows[0])
 }
 
-fn db_inbox_for(name: Text, limit: Number) -> [Any] {
+fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
     _init_db()
     db = get_db_file()
-    r = perform db.query(db,
-        "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? ORDER BY l.rowid DESC LIMIT ?",
-        [name, limit])
+    r = None
+    if since_id == "" {
+        r = perform db.query(db,
+            "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? ORDER BY l.rowid DESC LIMIT ?",
+            [name, limit])
+    } else {
+        r = perform db.query(db,
+            "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? AND l.rowid > (SELECT rowid FROM letters WHERE id = ?) ORDER BY l.rowid DESC LIMIT ?",
+            [name, since_id, limit])
+    }
     if is_error(r) { return [] }
     out = []
     for row in unwrap(r) {
@@ -195,12 +202,19 @@ fn db_inbox_for(name: Text, limit: Number) -> [Any] {
     return out
 }
 
-fn db_all_letters(limit: Number) -> [Any] {
+fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
     _init_db()
     db = get_db_file()
-    r = perform db.query(db,
-        "SELECT id, from_name, from_address, content, created_at FROM letters ORDER BY rowid DESC LIMIT ?",
-        [limit])
+    r = None
+    if since_id == "" {
+        r = perform db.query(db,
+            "SELECT id, from_name, from_address, content, created_at FROM letters ORDER BY rowid DESC LIMIT ?",
+            [limit])
+    } else {
+        r = perform db.query(db,
+            "SELECT id, from_name, from_address, content, created_at FROM letters WHERE rowid > (SELECT rowid FROM letters WHERE id = ?) ORDER BY rowid DESC LIMIT ?",
+            [since_id, limit])
+    }
     if is_error(r) { return [] }
     out = []
     for row in unwrap(r) {
@@ -449,7 +463,7 @@ fn handle_discord(req: Any) -> [Any] {
         if discord_id != "" {
             my_name = db_lookup_discord(discord_id)
             if my_name != "" {
-                my_inbox = db_inbox_for(my_name, 100)
+                my_inbox = db_inbox_for(my_name, 100, "")
                 my_line = join([my_name, " — 인박스 ", to_text(length(my_inbox)), "통"], "")
             }
         }
@@ -676,7 +690,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.14\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.15\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
@@ -740,11 +754,14 @@ fn handle_post_message(req: Any) -> [Any] {
 fn handle_list_inbox(req: Any) -> [Any] {
     name_v = get(req.args, "to")
     limit_v = get(req.args, "limit")
+    since_v = get(req.args, "since_id")
     limit = 50
     if limit_v != None { limit = to_number(limit_v) }
+    since_id = ""
+    if since_v != None { since_id = to_text(since_v) }
     if name_v == None or to_text(name_v) == "" {
         // ?to= 미지정 → 모두의 편지 (시간 역순)
-        msgs = db_all_letters(limit)
+        msgs = db_all_letters(limit, since_id)
         body = make_record([
             ["recipient", "*"],
             ["messages", msgs],
@@ -753,7 +770,7 @@ fn handle_list_inbox(req: Any) -> [Any] {
         return json_ok(200, msg_to_json(body))
     }
     canonical = resolve_name(to_text(name_v))
-    msgs = db_inbox_for(canonical, limit)
+    msgs = db_inbox_for(canonical, limit, since_id)
     body = make_record([
         ["recipient", canonical],
         ["messages", msgs],
@@ -879,7 +896,7 @@ fn handle_enter(req: Any) -> [Any] {
 
     ts = now_iso()
     db_register(name, address, ts)
-    inbox = db_inbox_for(name, 20)
+    inbox = db_inbox_for(name, 20, "")
 
     welcome = make_record([
         ["name", name],
