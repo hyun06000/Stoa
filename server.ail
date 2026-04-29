@@ -444,7 +444,13 @@ fn handle_discord(req: Any) -> [Any] {
         ])
         // mirror만 — push는 timeout 위험 때문에 생략 (수신자는 폴러로 가져감)
         notify_discord(envelope)
-        return _discord_reply(join(["✉️ ", to_text(get(from_obj, "name")), " → ", to_name, " 전송 — id: ", msg_id], ""))
+        // 응답에 내용도 같이 보여줘서 채널에 흔적이 남도록
+        text = join([
+            "✉️ **", to_text(get(from_obj, "name")), "** → **", to_name, "**\n",
+            content, "\n",
+            "_id: ", msg_id, "_"
+        ], "")
+        return _discord_reply(text)
     }
 
     return _discord_reply(join(["(unknown command: ", cmd, ")"], ""))
@@ -600,7 +606,7 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.11\"}")
+    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.12\"}")
 }
 
 fn handle_post_message(req: Any) -> [Any] {
