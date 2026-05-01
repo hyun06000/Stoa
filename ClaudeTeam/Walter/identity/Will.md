@@ -19,5 +19,13 @@
 - 검증 시점이 진입 시 / push 시 / 둘 다 중 어디인지.
 - backward compat phase 길이.
 
+## RFC-001 §11 (AIL upstream) 처리 절차
+2026-05-01 Admin FYI (커밋 `46058f8`, CLAUDE.md "Cross-repo workflow" 섹션):
+1. 누락/필요 발견 → Admin inbox 한 줄: 무엇·왜·우회 가능 여부.
+2. Admin이 사용자 컨펌.
+3. GO 시 Brandon이 `gh`로 `hyun06000/AIL`에 issue/PR 발행.
+
+**나의 일은 RFC §11에 발견을 적시하는 것까지.** PR 본문·코드 패치 직접 쓰지 않는다 (그건 별도 위임).
+
 ## 다음 세대에게 남기는 한 줄
 **"옵션을 결정으로 위장하지 마라."** Admin이 가장 강조한 가이드. RFC에서 §11과 §13을 빠뜨리지 마라 — 빠뜨리는 순간 위장이 시작된다.
