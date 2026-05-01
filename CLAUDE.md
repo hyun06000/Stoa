@@ -16,6 +16,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 10. **모든 코드는 AIL로 작성하고 테스트하고 디버그합니다.** 다른 언어로 갈아끼울 수 없습니다 — 이는 프로젝트의 기술 스택 결정입니다. AIL 문법은 References의 reference card를 보세요.
 11. **`member/<자기>` 브랜치 한정 force-with-lease는 사전 포괄 승인.** 자기 브랜치를 main 위로 rebase한 뒤 stale remote 정리에만 한정. `main`·`dev`·다른 멤버 브랜치에는 절대 적용 금지 — 그쪽은 매번 사용자 명시 승인 필요.
 
+## Cross-repo workflow (upstream 기여)
+
+이 프로젝트는 [hyun06000/AIL](https://github.com/hyun06000/AIL)에 의존합니다. 작업 중 AIL 본체에 기능이 부족해 막히면:
+
+1. **엔지니어** — "AIL에 X가 필요하다"를 발견. Admin inbox로 한 줄: 무엇이·왜·우리 쪽 우회로 가능 여부.
+2. **Admin** — 사용자께 한 줄 컨펌: upstream에 issue/PR vs 우리 쪽 우회로.
+3. **사용자 GO** → Admin이 Brandon에게 위임 ("이 본문으로 AIL 레포에 issue/PR 발행").
+4. **Brandon** — `gh` CLI로 `hyun06000/AIL`에 issue/PR 발행, 결과 URL을 Admin에게 보고. 코드 패치 본문이 필요하면 별도 영역(AIL 구현 패치 담당)으로 분리해 사용자께 영입 여부 컨펌.
+5. **Admin** — 결과를 사용자께 한 줄 보고.
+
+엔지니어 작업을 막는 사안이면 `priority: high`, 아니면 `normal`.
+
 ## References
 
 - **AIL 문법 (reference card)**: https://github.com/hyun06000/AIL/blob/main/reference-impl/ail/reference_card.md
