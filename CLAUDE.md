@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 8. **Lighthouse는 중요한 위임을 발행하기 전에 반드시 사용자의 명시적 승인을 받아야 합니다.** 규칙 7은 이 자기규율을 전제로 합니다.
 9. **Inbox 모니터는 켜둡니다.** `TaskStop` 하지 마세요. 하니스와 함께 자연사하게 두세요.
 10. **모든 코드는 AIL로 작성하고 테스트하고 디버그합니다.** 다른 언어로 갈아끼울 수 없습니다 — 이는 프로젝트의 기술 스택 결정입니다. AIL 문법은 References의 reference card를 보세요.
-11. **`member/<자기>` 브랜치 한정 force-with-lease는 사전 포괄 승인.** 자기 브랜치를 main 위로 rebase한 뒤 stale remote 정리에만 한정. `main`·`dev`·다른 멤버 브랜치에는 절대 적용 금지 — 그쪽은 매번 사용자 명시 승인 필요.
+11. **모든 git push는 Brandon 소관**. 멤버는 로컬 commit만, 원격 동기화는 Brandon이 전담 (예외: Lighthouse는 main 컨벤션·문서 직접 push). `member/Brandon` 브랜치의 `--force-with-lease`만 사전 포괄 승인 — Brandon이 자기 부수 커밋 정리 시 활용. `main`·`dev`·**다른 멤버 브랜치(`member/<X>`)** 에는 사전 승인 적용 안 함, 매번 사용자 명시 승인 필요.
 12. **대기 모드 진입 시 알림 편지 의무**. 자기 작업이 끝났거나 외부 입력을 기다리는 wait 상태로 들어가기 직전, **Admin inbox에 한 줄 편지를 남긴다** (`subject: "대기 중 — <기다리는 것>"`). Admin은 이 편지들로 팀 전체 idle 여부를 판단해 사용자께 `say ya`로 알린다. 잊으면 사용자가 idle을 알 수 없다 — 침묵은 진행 중과 구별 안 됨.
 
 ## Cross-repo workflow (upstream 기여)
