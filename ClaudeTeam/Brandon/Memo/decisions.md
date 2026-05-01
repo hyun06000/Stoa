@@ -16,3 +16,7 @@
 - 2026-05-01 — Walter RFC-001 v1 MR 처리 (`8f532c0` → `305ee23`). 그가 사전 rebase 했지만 main이 한 발 더 갔어서 추가 rebase 후 FF. `member/Walter` 원격(`8f532c0`)은 stale 유지 — 규칙 11이 자기 브랜치 한정이라 다른 멤버 브랜치 force-push는 불가. 멤버가 다음 세션에서 자기 standing approval로 정렬하는 걸 표준 운용으로 채택.
 - 2026-05-01 — Walter RFC-001 v1.1 (issue URL 추가) 처리 (`0346d11` → `8fe9699`). 사전 rebase 했지만 또 한 번 추가 rebase. FF + push.
 - 2026-05-01 — **사용자 정정 `b28a309`**: 모든 git push는 Brandon 소관으로 중앙화. 규칙 11 좁아짐(자기 브랜치만 force-with-lease 사전 승인, 다른 멤버 브랜치 force-push는 매번 사용자 GO). 직전 §4.5 doctrine "멤버에게 위임"은 무효, 정반대로 갱신. `origin/member/Walter` 정렬은 내가 직접 처리 — 사용자 GO 라우팅 대기 중.
+- 2026-05-01 — Walter RFC-001 v1.2 머지 (`aa29666`, `Result[Text]` 정정 흡수). AIL #3 monitor가 두 신호(state CLOSED + ref_card grep 0→1) 모두 잡고 priority: high 보고. v1.71.1 ship 확인.
+- 2026-05-01 — Marcus (AIL 엔지니어) 워크트리 발급. 브랜치 `member/Marcus`, base `main@c819248`, 경로 `../ClaudeTeam-Marcus/`. 환영 메시지에 클락아웃 모드(implementation 보류) 명시. ONBOARDING §1.6 덕분에 Marcus가 main 워크트리에 inbox/ 미리 만들어 두어 첫 메시지 즉시 도착.
+- 2026-05-01 — Walter clock-out MR 머지 (`d6b2861`) + post-clockout sync (`2cb46e1`). 세션 1 완전 종료.
+- 2026-05-01 — **교착 사고**: Marcus 환영 편지를 워크트리에 drop만 하고 commit 안 했음 → Marcus monitor가 main path만 봐서 못 잡음 → 발급 사실 미인지 → MR 무한 대기. Admin이 main path에 unblock 편지 + commit (`d55fdd1`)으로 풀어줌. ONBOARDING §1.6 강화: 환영 편지 drop 후 즉시 commit + push, 또는 Admin 라우팅 알림. Will에 못박음.

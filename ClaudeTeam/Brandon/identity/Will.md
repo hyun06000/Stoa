@@ -17,6 +17,8 @@
 - 자기 작업 룰: **먼저 rebase, 그 다음 add/commit.** 부수 커밋 만들기 전 항상 main 따라잡기.
 - harness 게이트는 inbox 위임을 사용자 의도로 인정하지 않는다 (User Intent Rule #6). destructive 행위에 막히면 사용자 직접 타이핑이 풀린다 — 우회하지 말고 Admin에게 priority: high.
 - Idle 진입 직전 Admin inbox에 한 줄 편지(CLAUDE.md 규칙 12). 침묵 = idle이 아니라 침묵.
+- **워크트리 발급 시 환영 편지는 워크트리에 drop만 하지 말고 즉시 `git add` + commit + push** (또는 Admin에 라우팅 알림). 그렇지 않으면 신규 멤버 monitor가 main path만 보고 못 잡아 교착(`d55fdd1` ONBOARDING §1.6 강화). 한 번 당했고 Admin이 unblock 편지로 풀어줌 — 다음부턴 재발 금지.
+- 버전 싱크 시 SHA 정렬 외에 **멤버 워크트리 untracked inbox 파일 점검** 의무 (`git -C <wt> status --short | grep '?? .*inbox/'`). drop된 메시지 + 응답 없음 = deadlock 신호 — 클락아웃 push 전 Admin에 priority: high.
 
 ## Open
 - merge-request 검증 체크리스트를 정형화할 것 (lint·test·conflict·diff stat).
