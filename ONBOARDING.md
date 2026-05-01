@@ -65,17 +65,30 @@ ClaudeTeam/<자신>/
 
 Brandon이 자리잡은 후의 신규 멤버는 **먼저 Brandon에게 워크트리를 요청**해야 합니다. 워크트리가 없는 곳에서는 안전하게 커밋할 수 없습니다. Brandon이 `member/<이름>` 브랜치와 `<parent>/ClaudeTeam-<이름>/` 워크트리를 만들어주면, 그 안에서 §1의 폴더 작업을 진행하세요.
 
-### §1.6 inbox 디렉터리 + 모니터를 **즉시** 띄우기 (워크트리 발급 전이라도)
+### §1.6 inbox 디렉터리 + 모니터 — 두 단계 (워크트리 발급 전·후)
 
-워크트리 발급은 Brandon 응답 시간에 따라 분~시간 단위 지연될 수 있습니다. 그 동안 Admin이 보낼 환영 편지나 사용자 정정이 당신의 to-be-created inbox(`<repo>/ClaudeTeam/<자신>/inbox/`, 즉 main 워크트리 경로)에 떨어질 수 있습니다. **모니터가 없으면 그 메시지를 못 봅니다.**
+**중요 — 두 path는 동일하지 않습니다.** main 워크트리(`Stoa/ClaudeTeam/<자신>/inbox/`)와 자기 워크트리(`ClaudeTeam-<자신>/ClaudeTeam/<자신>/inbox/`)는 같은 git 트리의 두 working copy일 뿐, **물리적으로 다른 inode·다른 디렉터리**입니다. commit하지 않은 직접 drop은 한쪽에서만 보입니다 → monitor가 잘못된 path를 보면 못 잡습니다 (2026-05-01 Marcus 합류 시 deadlock 발생).
 
-따라서 자기소개 발송 직후 **즉시**:
+**Phase 1 — 워크트리 발급 전**:
+1. main 워크트리 안의 `ClaudeTeam/<자신>/inbox/archive/`를 `mkdir -p`.
+2. monitor를 그 경로로 가동 (§2 폴링).
+3. Admin·사용자 측 commit된 메시지는 main에 들어가니 monitor가 잡음.
 
-1. **inbox 디렉터리 생성** — 워크트리 발급 전이라도 main 워크트리(`/Users/.../Stoa`) 안의 `ClaudeTeam/<자신>/inbox/archive/`를 `mkdir -p`. 이 경로는 워크트리 발급 후 자기 워크트리에서도 동일하게 보임 (git이 동일 트리이기 때문).
-2. **모니터 가동** (§2의 폴링 스크립트). 워크트리가 떨어지면 모니터 대상 경로를 워크트리 안의 inbox로 옮겨도 되지만, 그렇지 않아도 동일 파일이 양쪽에 보이므로 main 경로로 둬도 무방.
-3. 그 후에 워크트리 발급 대기.
+**Phase 2 — 워크트리 발급 직후 (Brandon이 worktree-issued 통보)**:
+1. **즉시 워크트리로 cd** (`/Users/.../ClaudeTeam-<자신>/`).
+2. **monitor 대상을 워크트리 경로로 이동** — 기존 main monitor stop, 워크트리 inbox에 새 monitor.
+3. 워크트리 inbox에 Brandon이 commit 없이 drop한 환영 편지가 untracked로 있을 수 있음 — 자기 부트스트랩 commit 시 함께 archive 후 add.
 
-이 룰이 깨지면 신규 멤버가 자기 합류 직후의 Lighthouse 첫 지시를 놓칩니다. **chicken-and-egg는 inbox 디렉터리를 미리 만들어 풀어주세요.**
+**Brandon 측 책임**:
+- 새 멤버에게 워크트리 발급 시 환영 편지를 워크트리 경로에 drop 후 **즉시 commit + push to main** — 그래야 발급 통지가 main monitor를 통해 회수 가능. drop만 하고 commit 안 하면 path 불일치로 deadlock.
+- 또는 Admin inbox에 "Marcus 워크트리 발급 완료 + 환영 편지 워크트리에 drop" 한 줄을 동시에 보내면 Admin이 라우팅으로 풀 수 있음.
+
+**버전 싱크 시 교착 확인 의무 (Brandon)**:
+팀 전원 sync 검증 시(예: 클락아웃 직전 final push) 단순히 SHA 정렬만 보지 말고, 다음 deadlock 신호도 점검:
+- 멤버 워크트리에 **untracked**로 남은 메시지 파일 (`git -C <worktree> status --short | grep '?? .*inbox/'`).
+- main path와 워크트리 path 사이 **commit되지 않은 차이** (특히 inbox/).
+- 멤버 monitor가 이미 죽었거나 잘못된 경로를 보고 있는 정황 (해당 멤버가 일정 시간 응답 없음 + drop된 메시지 존재).
+신호 발견 시 **본인 클락아웃·최종 push 진행 전 Admin에게 priority: high로 보고**. 미해소 deadlock 위에서 push하면 다음 세션에 같은 교착이 다시 발생.
 
 ---
 
