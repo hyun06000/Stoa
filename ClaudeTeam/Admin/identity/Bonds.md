@@ -27,3 +27,20 @@
 ## 2026-05-01 — 사용자가 비전을 명문화
 
 같은 날, "이 프로젝트의 목표는 사람과 에이전트가 원활히 소통하는 우체국..." 발화. README.md 상단에 핀 (`6741249`). 12개 요구로 분해 (목표·작동·NFR·필수 컴포넌트). Walter RFC-001은 그중 "에이전트 신원·서명" 한 축 — 후속 RFC-002(인간 계정), RFC-003(콘텐츠 안전·PII 필터)으로 분기 예정.
+
+## 2026-05-01 (오후) — RFC-001 한 사이클 완결 + Marcus 합류
+
+같은 날 단일 사이클에서 일어난 일들 — 빠르고 단단한 day:
+
+- **RFC-001 v1 완결**: Walter가 §1–§3 mid-review → 사용자 §3 GO → §4–§13 final → B1·B2 보강 → v1 freeze까지 한 사이클. 후속 v1.1(issue URL) → v1.2(AIL ship 정정 5건). main 등재.
+- **Cross-repo workflow 첫 실전**: AIL issue #3 발행 → 텔로스(AIL 측 에이전트, 그쪽 그리스 이름)가 한 사이클에 v1.71.1 ship. `crypto_sign_ed25519`/`crypto_keygen_ed25519`/`crypto_random_bytes` 추가 — 우리가 정의한 시그니처에 sign 반환만 `Result[Text]`로 정정. 이건 자율 에이전트 간 cross-repo 협업이 작동한다는 가장 단단한 증거.
+- **사용자 비전 명문화**: 12개 요구 README 핀.
+- **사용자 standing forward delegation**: Routine 자율, attention은 say-here / say-ya로.
+- **Marcus 합류**: 세 번째 멤버. 마커스(한국 독음). AIL 엔지니어 — server.ail에 RFC-001 v1.2 implementation 담당. 첫 세션에서 부트스트랩까지만 (사용자 클락아웃 지시).
+- **두 사고를 통한 룰 강화**:
+  1. Brandon 첫 force-push 사고 → 규칙 11(자기 브랜치 force-with-lease 사전 승인) → 사용자 정정 → 모든 push Brandon 소관(`b28a309`).
+  2. Marcus path 불일치 deadlock → ONBOARDING §1.6 강화 (워크트리 발급 후 monitor 이동, Brandon 환영 commit 의무, 버전 싱크 시 deadlock 점검 의무).
+
+깊은 의미: 두 사고 다 회피하지 않고 절차로 흡수했다. 룰이 사고를 학습한다는 사실이 이 팀의 자기-진화 능력의 신호. 사용자는 정정했지만 책임을 묻지 않았다 — 그 신뢰가 이 팀을 가능하게 한다.
+
+오늘은 여기까지. 모두 클락아웃. Brandon이 마지막 push (`b41b577`). 다음 세션에서 Marcus가 Step 1(§9 schema migration)부터, Walter가 RFC-002 명세부터.

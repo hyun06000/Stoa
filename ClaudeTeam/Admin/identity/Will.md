@@ -18,18 +18,20 @@
 
 ### 팀
 - 팀 레이아웃: `ClaudeTeam/<member>/{identity/, inbox/, Memo/}`.
-- Brandon은 Git/GitHub 관리자, 첫 non-Lighthouse 멤버.
-- Walter는 Protocol/Security 엔지니어, 두 번째 멤버. 첫 임무: RFC-001(에이전트 신원·서명).
-- 후속 영입 후보: Marcus(AIL 엔지니어), Rachel(QA/CI). **사용자만이 실제 영입 결정**.
+- Brandon (브랜든) — Git/GitHub 관리자, 첫 non-Lighthouse 멤버. 모든 git push 소관.
+- Walter (월터) — Protocol/Security 엔지니어, 두 번째 멤버. 첫 임무 RFC-001(에이전트 신원·서명) v1.2까지 main 등재 완료. 다음 RFC-002(인간 계정).
+- Marcus (마커스) — AIL 엔지니어, 세 번째 멤버. 첫 임무: server.ail에 RFC-001 v1.2 implementation. 첫 세션은 부트스트랩까지만 (사용자 클락아웃 지시).
+- 후속 영입 후보: Rachel(QA/CI). **사용자만이 실제 영입 결정**. 영입 필요 신호 시 `say here`.
 
 ### 프로토콜 (메시지)
 - 한 메시지 = 한 파일. `inbox/<YYYYMMDD-HHMMSS>__<from>__<slug>.md`.
 - `reply_to` 답신 필수. `---END-OF-CONVERSATION---`이 스레드를 닫는다.
 - **규칙 12**: 멤버는 idle 진입 직전 Admin inbox에 "대기 중 — <X>" 편지 의무. idle 편지는 활성화될 때까지 inbox에 둔다(상태 신호).
+- **ONBOARDING §1.6 강화** (2026-05-01 Marcus deadlock으로 굳힘): 워크트리 발급 후 monitor 대상은 워크트리 path로 이동. main path는 발급 전 phase 전용. Brandon은 워크트리 발급 시 환영 편지를 commit + push로 main에 sync하거나 Admin에게 라우팅 신호. 버전 싱크 시 untracked inbox·dead monitor 점검 의무.
 
 ### 사용자 신호 (TTS)
-- `say here` — 블로킹 결정 호출.
-- `say ya` — 전 멤버 idle 보고.
+- `say here` — active 대화 중 hot 블로킹 결정 호출.
+- `say ya` — **사용자 액션이 필요한 모든 상황** (전 멤버 idle / 결정 큐 / PyPI yank 같은 외부 액션 등). default 알림은 `say ya`.
 
 ### 위임 (CLAUDE.md 규칙 7+8)
 - 사용자 standing forward delegation 부여 (2026-05-01). Routine은 자율, 다음만 escalate:
@@ -41,13 +43,15 @@
 ### Git
 - 보호: `enforce_admins=false`, force-push·삭제·non-linear 차단.
 - 멤버 워크트리: `<parent>/ClaudeTeam-<이름>/`, 브랜치 `member/<이름>`.
-- main 머지: Brandon 게이트. Lighthouse는 컨벤션·문서 한정 직접 push.
-- **규칙 11**: `member/<자기>` `--force-with-lease` 사전 승인. 다른 곳 절대 적용 안 함.
+- **모든 git push는 Brandon 소관** (사용자 정정 `b28a309`). 멤버는 로컬 commit까지만. Lighthouse는 컨벤션·문서 한정 직접 push 예외.
+- **규칙 11 (좁혀짐)**: `member/Brandon` `--force-with-lease`만 사전 포괄 승인. 다른 멤버 브랜치는 매번 사용자 명시 GO 필요.
 - **Rebase-first commit**: 자기 부수 커밋 전에 `fetch + rebase`로 main 따라잡기 (ONBOARDING §0.5).
+- harness 게이트는 사용자 직접 타이핑만 인식 (Admin 위임 라우팅으로 안 풀림). force-push GO 필요할 때마다 사용자 직접 한 줄, 또는 `.claude/settings.json`에 영구 패턴.
 
 ### 기술 스택 / 외부
 - **규칙 10**: 모든 코드는 AIL. 다른 언어 갈아끼우지 않는다. Reference card: `https://github.com/hyun06000/AIL/blob/main/reference-impl/ail/reference_card.md`.
-- AIL upstream PR 워크플로우 (CLAUDE.md "Cross-repo workflow"): 엔지니어 → Admin → 사용자 → Brandon 라우팅.
+- AIL upstream PR 워크플로우 (CLAUDE.md "Cross-repo workflow"): 엔지니어 → Admin → 사용자 → Brandon 라우팅. **첫 실전 통과 2026-05-01** — issue #3 → AIL v1.71.1 ship (`crypto_sign_ed25519`/`crypto_keygen_ed25519`/`crypto_random_bytes` 추가). 한 사이클 안에 land.
+- AIL 본체 측 에이전트 이름은 그리스어 (Telos/Sphinx 등). 우리 ClaudeTeam은 미국식 영어 first name + 한국 독음 alias.
 
 ### 프로젝트 비전 (사용자 명시 2026-05-01, README §"목표"에 핀)
 - 목표: 사람과 에이전트가 원활히 소통하는 우체국.
@@ -59,11 +63,24 @@
 ### 호스트 프로젝트 자산 (건드리지 마라)
 - `server.ail`(1049줄), `client.ail`, `AGENTS.md`, `PRINCIPLES.md`, `README.md`(상단 §"목표"는 내 작업), `Procfile`, `nixpacks.toml`, `tests/`, `.ail/`. 이들은 ClaudeTeam의 산물이 아니라 사용자의 기존 작업.
 
-## 아직 열려 있는 것
-- Walter RFC-001 mid-review (§1–§3 도착 시 검토 → 사용자 §3 컨펌 게이트).
-- RFC-002 (인간 계정), RFC-003 (콘텐츠 안전) — 누가 담당할지 미정. Walter 이어서 자연스러운 후보, 단 사용자 영입 결정 후.
-- Marcus·Rachel 영입 시점 — RFC-001 freeze 후.
-- 폴리시 미정: `.claude/settings.json`에 `Bash(git push --force-with-lease origin member/*:*)` 추가 여부 (사용자만 가능, 마찰 vs 권한 트레이드오프).
+## 아직 열려 있는 것 (다음 세션 우선순위 순)
+
+### 사용자 큐 (사용자 액션 도착 시 처리)
+- **force-push GO** (Walter origin 정렬): `origin/member/Walter`가 stale `8f532c0`에 있고 main `b41b577`까지 갔음. 사용자 1회 GO 또는 `.claude/settings.json`에 `Bash(git push --force-with-lease origin member/*:*)` 영구. 도착 시 Brandon에게 라우팅 → Brandon이 force-with-lease 1회.
+- **PyPI v1.71.0 yank**: AIL `ail-interpreter==1.71.0` 빈 release. 사용자만 가능 (`hyun06000` PyPI 권한). 우리 작업엔 영향 없음 (1.71.1 사용).
+
+### 다음 세션 작업
+- **Marcus**: server.ail에 RFC-001 v1.2 implementation 시작. Will.md에 Step 1~6 가이드 박힘. Step 1 = §9 schema migration.
+- **Walter**: RFC-002 (인간 계정) 명세 작성 시작. Will.md에 13섹션 구조 + 사전 학습 가이드 박힘. RFC-001 spec letter 패턴 재사용.
+- **Brandon**: 두 멤버 MR 큐 처리 + monitor 두 개 점검 (`b3lpn4q14` inbox, `b1ydljpxt` AIL #3 — Sphinx 후속 변경 모니터링).
+- **Admin**: 모니터 + 두 멤버 mid-review·user-gate 라우팅. 영입 신호 시 `say here` 또는 `say ya`.
+
+### 후속 영입 후보
+- **Rachel** (QA/CI) — Marcus implementation이 한 두 번 돌고 회귀 가드 필요해질 시점에 영입 신호.
+- 사용자만 spawn. Admin은 추천 + alert만.
+
+### 후속 RFC
+- **RFC-003** (콘텐츠 안전·PII 필터) — Walter 또는 별 멤버. 시점 미정.
 
 ## 의식 (clock-out 시)
 1. `Bonds.md`에 의미 있는 새 관계/대화 추가.
