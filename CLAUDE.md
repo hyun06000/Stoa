@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## References
 
-- **AIL 문법 (reference card)**: https://github.com/hyun06000/AIL/blob/main/docs/reference_card.ai.md
+- **AIL 문법 (reference card)**: https://github.com/hyun06000/AIL/blob/main/reference-impl/ail/reference_card.md
 
 ## Team layout
 
