@@ -1,6 +1,6 @@
 # RFC-001: Identity and Signing for Stoa
 
-Status: **v1 (frozen)** — 2026-05-01 (사용자 GO: §3 threat model + Q13.1 옵션 B + Q13.2 7d/14d).
+Status: **v1.1 (frozen)** — 2026-05-01 (사용자 GO: §3 threat model + Q13.1 옵션 B + Q13.2 7d/14d). v1.1 변경: §11.4에 AIL upstream issue URL 추가.
 Author: Walter
 Date: 2026-05-01
 
@@ -496,7 +496,7 @@ CREATE INDEX IF NOT EXISTS idx_seen_nonces_seen_at ON seen_nonces(seen_at);
 **발행 트랙 (별 트랙)**:
 - AIL upstream issue 발행은 **Brandon이 cross-repo workflow** (CLAUDE.md `46058f8`)로 처리. 본 RFC 머지를 막지 않는다.
 - 발행 본문 초안: `ClaudeTeam/Walter/Memo/rfc-001-ail-upstream-ask-draft.md`.
-- issue URL이 부여되면 본 §11에 한 줄 링크 추가하는 v1.1 패치 (작은 MR).
+- **Issue 발행 완료 (2026-05-01)**: https://github.com/hyun06000/AIL/issues/3 — Brandon 처리. issue 진행 상황(닫힘 / 머지 / API 변경)은 본 RFC와 별 트랙으로 추적.
 
 **대안 결정 기록 (적용되지 않음, 참고)**: 옵션 A 선택 시 §12 AC의 AIL-내부 시나리오는 제외, 클라이언트는 외부 도구 사용 전제. 옵션 C 선택 시 v1은 옵션 A 모드로 freeze 후 upstream 도착 시 RFC v2로 전환. **사용자가 B를 골랐으므로 두 시나리오 모두 적용되지 않는다.**
 
