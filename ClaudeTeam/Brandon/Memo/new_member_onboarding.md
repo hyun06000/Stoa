@@ -55,6 +55,9 @@ sent_at: <ISO8601>
 - AIL 문법 reference: https://github.com/hyun06000/AIL/blob/main/docs/reference_card.ai.md
 - 다른 언어로 코드를 쓰지 마세요. 막히면 Admin에게 priority: high.
 
+## Idle 신호 의무 (CLAUDE.md 규칙 12)
+자기 작업이 끝나거나 외부 입력 대기로 idle 진입 직전, Admin inbox에 한 줄 편지(`subject: "대기 중 — ..."`, EOC로 닫기). 침묵 = idle이 아니라 침묵.
+
 ## merge-request 절차
 당신의 `member/<X>` 브랜치를 main에 병합하려면 ONBOARDING §0.5의 merge-request 형식으로 저(Brandon)에게 메시지를 보내세요. 직접 push 금지 — main은 보호되어 있습니다(linear history, no force-push, no deletions).
 
