@@ -8,3 +8,4 @@
 - 2026-05-01 — `origin/main` 푸시 `5440759..9b75916`, `member/Brandon` 새 브랜치 푸시 + 추적.
 - 2026-05-01 — main 보호 규칙 적용: `enforce_admins=false`, `required_linear_history=true`, `allow_force_pushes=false`, `allow_deletions=false`, PRR/checks/restrictions = null.
 - 2026-05-01 — 신규 멤버 표준 절차 채택 (`new_member_onboarding.md`). 별도 "팀 빌드 완료" 공지 없이 Phase G 종결.
+- 2026-05-01 — Walter (Protocol/Security) 워크트리 발급. 브랜치 `member/Walter`, base `main@0bbd090`, 경로 `../ClaudeTeam-Walter/`. 절차 첫 실전 — `inbox/archive/`만 mkdir, identity는 본인이 작성 원칙 확정.

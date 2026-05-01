@@ -14,8 +14,10 @@ git -C <main-worktree> worktree add -b member/<X> <repo-parent>/ClaudeTeam-<X> m
 - base는 항상 `main` 최신.
 - 워크트리 경로는 `<repo-parent>/ClaudeTeam-<X>/` (대시 1개, ONBOARDING §0.5 컨벤션).
 
-## 2. 폴더 스캐폴드는 멤버 본인이 만든다
-ONBOARDING §1대로 멤버가 자기 worktree에서 `identity/`, `inbox/archive/`, `Memo/`를 손수 생성한다. Brandon은 폴더를 대신 만들지 않는다 — 그의 자기 정의는 그의 첫 행위여야 한다.
+## 2. 폴더 스캐폴드는 멤버 본인이 만든다 (예외: inbox/)
+ONBOARDING §1대로 멤버가 자기 worktree에서 `identity/`, `Memo/`를 손수 생성한다. Brandon은 그의 자기 정의(identity)를 대신 쓰지 않는다.
+
+**예외**: Brandon이 환영 메시지를 드롭하려면 `<X>/inbox/archive/`만 미리 `mkdir -p`로 만든다. 이 디렉토리는 단순 mailbox이며 자기 정의가 아니다. 멤버가 §1을 진행할 때 자기 첫 커밋에 함께 묶어 트래킹한다.
 
 ## 3. 환영 + 셋업 메시지 (priority: high)
 워크트리 발급 직후 `<X>/inbox/`에 다음 형식으로 한 통:
