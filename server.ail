@@ -42,10 +42,28 @@ fn _init_db() -> Any {
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_letters_from ON letters(from_name)")
     // registry — 누가 어디서 듣고 있나. append-only, 같은 이름의 최신 행이 곧 현재 주소.
+    // RFC-001 §9.1: public_key TEXT NULL 컬럼 추가 (grandfather용 NULL 허용).
     perform db.execute(db,
         "CREATE TABLE IF NOT EXISTS registry (name TEXT NOT NULL, address TEXT NOT NULL, registered_at TEXT NOT NULL)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_registry_name ON registry(name)")
+    // ALTER TABLE ADD COLUMN은 SQLite에서 컬럼 존재 시 에러. PRAGMA로 사전 점검.
+    // PRINCIPLES §3 충돌 검사 (RFC §9.4): 컬럼 추가는 row 변경이 아니므로 OK.
+    pk_present = false
+    pi = perform db.query(db, "PRAGMA table_info(registry)", [])
+    if not is_error(pi) {
+        for row in unwrap(pi) {
+            if row[1] == "public_key" { pk_present = true }
+        }
+    }
+    if not pk_present {
+        perform db.execute(db, "ALTER TABLE registry ADD COLUMN public_key TEXT")
+    }
+    // seen_nonces — RFC-001 §7.3 / §9.2. append-only, INSERT only.
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS seen_nonces (from_name TEXT NOT NULL, nonce TEXT NOT NULL, seen_at TEXT NOT NULL, PRIMARY KEY (from_name, nonce))")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_seen_nonces_seen_at ON seen_nonces(seen_at)")
     // discord_users — discord_id → stoa_name 매핑. append-only, latest wins.
     perform db.execute(db,
         "CREATE TABLE IF NOT EXISTS discord_users (discord_id TEXT NOT NULL, stoa_name TEXT NOT NULL, bound_at TEXT NOT NULL)")
