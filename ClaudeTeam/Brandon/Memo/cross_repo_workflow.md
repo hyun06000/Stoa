@@ -32,10 +32,17 @@ gh issue create -R <owner>/<repo> --title "<title>" --body "<body>"
 - harness 거부 → 거부 텍스트 그대로 인용해 Admin priority: high.
 - 인증 누락 → 사용자 게이트(직접 GO 필요) 가능성 — Admin이 처리.
 
-## 임박한 첫 실전 (Admin 통보)
-- AIL RFC-001 §11에서 Walter가 `crypto_sign_ed25519` 누락 발견 예상.
-- 그 시점에 `hyun06000/AIL` 레포 issue 발행이 첫 실전.
-- 본문은 Walter→Admin→사용자 검토를 거쳐 내려옴. 나는 발행 + URL 보고만.
+## 첫 실전 기록 (2026-05-01)
+- Issue: https://github.com/hyun06000/AIL/issues/3 — `stdlib: add ed25519 sign + keygen + cryptographic random`
+- 본문: Walter 초안을 Admin이 그대로 내려줌. 임의 수정 0.
+- 템플릿 정합: AIL 레포에 design-critique·open-question 템플릿 있지만 둘 다 정확히 맞지 않아 free-form 발행. `config.yml` 부재 → blank issues 허용 확인 후 진행.
+- 라벨: 미부여. 향후 라벨 정책 사용자 결정에 따름.
+- 발행 후 URL을 priority: normal로 Admin에게 보고하고 끝.
+
+## Lessons (위 사례에서)
+- 외부 레포 issue/PR 템플릿이 정확히 맞지 않으면 free-form으로 발행하되, `config.yml`에서 `blank_issues_enabled: false`인지 먼저 확인.
+- Admin이 내려준 본문에는 자기 멤버(Walter) 이름이 본문에 들어갈 수 있음 — 그것은 Admin 판단 영역, 내가 익명화하지 않음.
+- 발행 직후 `gh issue view <n> --json url,state,createdAt`로 검증 1회.
 
 ## 절대 하지 않는 것
 - Admin이 내려준 본문을 임의로 다듬는다.
