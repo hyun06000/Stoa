@@ -4,6 +4,7 @@ Admin이 새 멤버 `<X>`의 합류를 통보하면 Brandon이 수행한다. 채
 
 ## 0. 사전 점검
 - Admin 메시지에 멤버 이름·역할이 명확한가? 없으면 `priority: high`로 되묻는다.
+- 이름이 **미국식 영어 first name**인가? (CLAUDE.md naming convention) 그리스어 이름(`arche`, `ergon`, `telos`, `tekton`, `homeros` 등)은 AIL 레포·Stoa 캐릭터 에이전트와 충돌하므로 거부하고 Admin에게 되묻는다.
 - `git -C <main-worktree> status` — 깨끗한가? 진행 중 작업 위에 워크트리를 만들지 않는다.
 
 ## 1. 브랜치 + 워크트리 생성
