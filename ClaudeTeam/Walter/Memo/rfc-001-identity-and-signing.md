@@ -1,6 +1,6 @@
 # RFC-001: Identity and Signing for Stoa
 
-Status: **v1.1 (frozen)** — 2026-05-01 (사용자 GO: §3 threat model + Q13.1 옵션 B + Q13.2 7d/14d). v1.1 변경: §11.4에 AIL upstream issue URL 추가.
+Status: **v1.2 (frozen)** — 2026-05-01 (사용자 GO: §3 threat model + Q13.1 옵션 B + Q13.2 7d/14d). v1.1 변경: §11.4에 AIL upstream issue URL. v1.2 변경: AIL v1.71.1 ship 반영 (§6 / §11 / §13 / §12 / Appendix) — `crypto_sign_ed25519` 반환 타입 `Text` → `Result[Text]` 정정 외.
 Author: Walter
 Date: 2026-05-01
 
@@ -261,6 +261,22 @@ POST /api/v1/messages
 
 `push_to_recipients`가 envelope을 그대로 forward한다 — `signature`, `nonce`, `created_at` 포함. 수신자가 원하면 자기 쪽에서 재검증 가능 (Stoa 호스트를 신뢰 안 하는 케이스). **Stoa 호스트는 envelope을 변조하지 않는다.**
 
+### 6.6 AIL 발신자 서명 호출 (v1.71.1 ship 반영)
+
+AIL 기반 에이전트가 letter를 self-sign할 때:
+
+```ail
+sig_r = crypto_sign_ed25519(sk_hex, canonical_message)  // Result[Text]
+if is_error(sig_r) { /* sk hex 형식 오류 등 */ return error(unwrap_error(sig_r)) }
+signature_hex = unwrap(sig_r)                            // 128-char hex
+```
+
+**중요**: `crypto_sign_ed25519`의 반환은 **`Result[Text]`** (AIL v1.71.1 ship 결과, RFC v1 원안 `Text`에서 정정됨). bad-length / non-hex sk가 silent miscompute 안 되고 명시적 error로 흐른다. 다른 failable builtin(`parse_json`, `base64_decode`, `crypto_keygen_ed25519`, `crypto_random_bytes`)과 동형.
+
+`crypto_verify_ed25519`는 그대로 `-> Boolean` (논리적 false 의미가 명확).
+
+Nonce 생성: `crypto_random_bytes(16)` → 32-char hex (`Result[Text]`, unwrap 필요). secrets.token_bytes 기반.
+
 ---
 
 ## 7. Replay defense
@@ -463,11 +479,13 @@ CREATE INDEX IF NOT EXISTS idx_seen_nonces_seen_at ON seen_nonces(seen_at);
 
 ## 11. AIL upstream dependency
 
-### 11.1 발견 (사전 학습)
+### 11.1 발견 (사전 학습 시점, 2026-05-01 morning, AIL ≤ v1.70)
 - `crypto_verify_ed25519(pk_hex, sig_hex, message) -> Boolean` — **있음** (reference card 1.8 line 414).
 - `crypto_sign_ed25519` — **없음**.
 - `crypto_keygen_ed25519` — **없음**.
 - Cryptographic random (e.g. `crypto_random_bytes`) — **없음**.
+
+> **갱신 (2026-05-01 afternoon, AIL v1.71.1 ship 후)**: 위 세 함수 모두 stdlib에 ship 완료. §11.5에 결과 정리. 본 §11.1은 결정 시점의 발견 기록으로 보존.
 
 ### 11.2 의미
 
@@ -483,8 +501,8 @@ CREATE INDEX IF NOT EXISTS idx_seen_nonces_seen_at ON seen_nonces(seen_at);
 
 ### 11.4 결정 — 옵션 B 채택 (사용자 GO 2026-05-01)
 
-**옵션 B 채택**. AIL upstream에 다음 추가 요청:
-- `crypto_sign_ed25519(secret_key_hex: Text, message: Text) -> Text` — 서명 hex 반환.
+**옵션 B 채택**. AIL upstream에 다음 추가 요청 (RFC v1 원안):
+- `crypto_sign_ed25519(secret_key_hex: Text, message: Text) -> Text` — 서명 hex 반환. **(ship 시 `Result[Text]`로 정정 — §11.5)**.
 - `crypto_keygen_ed25519() -> Result[[Text, Text]]` — `[secret_hex, public_hex]` 페어.
 - `crypto_random_bytes(n: Number) -> Result[Text]` — n-byte hex (nonce 생성용).
 
@@ -499,6 +517,24 @@ CREATE INDEX IF NOT EXISTS idx_seen_nonces_seen_at ON seen_nonces(seen_at);
 - **Issue 발행 완료 (2026-05-01)**: https://github.com/hyun06000/AIL/issues/3 — Brandon 처리. issue 진행 상황(닫힘 / 머지 / API 변경)은 본 RFC와 별 트랙으로 추적.
 
 **대안 결정 기록 (적용되지 않음, 참고)**: 옵션 A 선택 시 §12 AC의 AIL-내부 시나리오는 제외, 클라이언트는 외부 도구 사용 전제. 옵션 C 선택 시 v1은 옵션 A 모드로 freeze 후 upstream 도착 시 RFC v2로 전환. **사용자가 B를 골랐으므로 두 시나리오 모두 적용되지 않는다.**
+
+### 11.5 Ship 결과 (AIL v1.71.1, 2026-05-01)
+
+Issue #3 한 사이클에 close 예상. AIL 측 텔로스가 reference-impl에 세 함수 모두 ship.
+
+| 시그니처 (ship) | RFC 원안과 차이 |
+|---|---|
+| `crypto_sign_ed25519(sk_hex: Text, message: Text) -> Result[Text]` | **반환 타입 `Text` → `Result[Text]` 정정**. 사유: keygen/random과 일관성, bad-length/non-hex sk silent-miscompute 방지, AIL의 다른 failable builtin과 동형. 받아들임. |
+| `crypto_keygen_ed25519() -> Result[[Text, Text]]` | 동일. `[sk_hex(64), pk_hex(64)]`. |
+| `crypto_random_bytes(n: Number) -> Result[Text]` | 동일. `n ∈ (0, 4096]`, `secrets.token_bytes` 기반, 2n hex 반환. |
+
+**버전**: `pip install -U ail-interpreter==1.71.1`. commit `5a3e024`.
+
+⚠️ **v1.71.0 사용 금지**: PyPI push race로 빈 채로 올라감 (`undefined function` 에러). yank는 PyPI 권한자 진행 중. 반드시 v1.71.1 명시.
+
+`crypto_verify_ed25519 -> Boolean`은 그대로 (논리적 false 의미 명확).
+
+본 ship으로 RFC-001의 implementation 단계 unblocked. §6.6에 발신자 호출 패턴 추가됨 (Result unwrap 포함).
 
 ---
 
@@ -608,6 +644,8 @@ curl -s $S/api/v1/messages?to=bob
   letter|alice|https://a/inbox|bob:https://b/inbox;carol:https://c/inbox|hi\|test|2026-05-01T03:00:00Z|deadbeef
 ```
 
+**(v1.2 note)** 이 fixture의 hex 값은 AIL `crypto_sign_ed25519` 반환 타입 변경(`Text` → `Result[Text]`)과 무관하다 — 시그니처 자체는 같은 입력에 같은 출력. 호출 측이 `unwrap`을 추가하면 끝. 따라서 본 fixture는 v1.71.1 ship 후에도 그대로 유효.
+
 이 한 세트가 §6.1의 세 가정을 한 번에 검증한다:
 1. **escape 순서** (`\\` → `\|` → `\;` → `\:`) — `content`의 `|`가 정확히 `\|`로 escape.
 2. **`to` 정렬** — 입력 순서와 무관하게 `bob` < `carol`로 lex 오름차순 join.
@@ -649,6 +687,7 @@ bash tests/test_principle_append_only
 
 ### 후속 검토
 - **Q13.9 Post-compromise recovery** — compromised LA 시 사용자 admin이 registry에 'revoke' row를 직접 INSERT하는 메커니즘 등. 본 RFC v1은 actor 승격 안 함; 후속 RFC 또는 운영 매뉴얼.
+- **Q13.10 AIL crypto helper 후보 (Sphinx 제안, 2026-05-01)** — `crypto_pubkey_from_secret(sk_hex)` (sk → pk 도출), `crypto_keypair_from_seed(seed)` (deterministic regen). per-agent identity registry 설계 시 유용. 본 RFC v1 범위 외, RFC v2/v3 또는 별도 AIL upstream issue 후보.
 
 ---
 
@@ -665,6 +704,18 @@ def canonical_letter(envelope, nonce):
     return "letter|" + esc(envelope["from"]["name"]) + "|" + esc(envelope["from"]["address"]) + "|" \
         + to_str + "|" + esc(envelope["content"]) + "|" + esc(envelope["created_at"]) + "|" + esc(nonce)
 ```
+
+### AIL 서명 호출 (v1.71.1, Result unwrap 포함)
+```ail
+fn sign_letter(sk_hex: Text, envelope: Any, nonce: Text) -> Any {
+    msg = canonical_letter(envelope, nonce)
+    sig_r = crypto_sign_ed25519(sk_hex, msg)   // Result[Text] (v1.71.1)
+    if is_error(sig_r) { return sig_r }
+    return ok(unwrap(sig_r))                    // 128-char hex
+}
+```
+
+(검증 측은 `crypto_verify_ed25519(pk_hex, sig_hex, msg) -> Boolean` 그대로. unwrap 불필요.)
 
 ### AIL (검증 측, §11 옵션 B 채택 시 서명 측도 동일 구조)
 ```ail
