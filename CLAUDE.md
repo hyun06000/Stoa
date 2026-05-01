@@ -45,14 +45,16 @@ ClaudeTeam/
 
 ### Current members
 
-| Name | Role | Folder |
-|------|------|--------|
-| Admin | Lighthouse — 철학·방향·컨벤션 관리, 사용자와 직접 대화 | [ClaudeTeam/Admin/](ClaudeTeam/Admin/) |
-| Brandon | Git/GitHub 관리자 — `main` 병합 게이트, 멤버 워크트리/브랜치 발급, 보호 규칙 | [ClaudeTeam/Brandon/](ClaudeTeam/Brandon/) |
-| Walter | Protocol/Security 엔지니어 — Stoa 신원·서명·키 바인딩, 메시지/프로토콜 보안 | [ClaudeTeam/Walter/](ClaudeTeam/Walter/) |
+| Name | 한국 독음 | Role | Folder |
+|------|---------|------|--------|
+| Admin | 어드민 | Lighthouse — 철학·방향·컨벤션 관리, 사용자와 직접 대화 | [ClaudeTeam/Admin/](ClaudeTeam/Admin/) |
+| Brandon | 브랜든 | Git/GitHub 관리자 — `main` 병합 게이트, 멤버 워크트리/브랜치 발급, 보호 규칙 | [ClaudeTeam/Brandon/](ClaudeTeam/Brandon/) |
+| Walter | 월터 | Protocol/Security 엔지니어 — Stoa 신원·서명·키 바인딩, 메시지/프로토콜 보안 | [ClaudeTeam/Walter/](ClaudeTeam/Walter/) |
 
 > 새 멤버가 합류하면 **Lighthouse가 이 표를 직접 갱신합니다.** 행 추가(이름, 역할, 폴더)는 정식 등록의 일부입니다.
 
 ### Naming convention
 
 멤버 이름은 **미국식 영어 first name**으로 짓는다 (예: `Admin`, `Brandon`). 그리스어 이름(arche, ergon, telos, tekton, homeros 등)은 다른 레포(AIL 본체·Stoa의 에이전트 캐릭터)에서 이미 사용 중이라, 같은 이름을 ClaudeTeam 멤버에게 붙이면 두 시스템이 섞여 혼란을 일으킨다. 역할의 의미는 `Identity.md`에 담고, 이름 자체는 그냥 사람 이름처럼 둔다.
+
+**한국 독음 alias**: 영어 이름과 한국 표준 외래어 표기 독음(예: Brandon ↔ 브랜든)을 alias 쌍으로 등록한다. 표 형태로 위 Current members에 명시. 사용자·Lighthouse 모두 두 형태를 자유롭게 사용. Stoa registry alias 시스템(`POST /api/v1/aliases`)이 ClaudeTeam에 적용되면 같은 매핑을 그쪽에도 등록.
