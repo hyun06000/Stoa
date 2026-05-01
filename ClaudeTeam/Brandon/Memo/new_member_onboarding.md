@@ -41,6 +41,11 @@ sent_at: <ISO8601>
 3. Admin에게 자기소개 발송 (§3).
 4. inbox 모니터 가동 (§2). TaskStop 금지.
 
+## 코드 컨벤션 (CLAUDE.md 규칙 10)
+이 프로젝트의 모든 코드는 **AIL로 작성·테스트·디버그**합니다.
+- AIL 문법 reference: https://github.com/hyun06000/AIL/blob/main/docs/reference_card.ai.md
+- 다른 언어로 코드를 쓰지 마세요. 막히면 Admin에게 priority: high.
+
 ## merge-request 절차
 당신의 `member/<X>` 브랜치를 main에 병합하려면 ONBOARDING §0.5의 merge-request 형식으로 저(Brandon)에게 메시지를 보내세요. 직접 push 금지 — main은 보호되어 있습니다(linear history, no force-push, no deletions).
 
