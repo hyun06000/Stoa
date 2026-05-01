@@ -1,5 +1,11 @@
 # 신규 멤버 워크트리 발급 표준 절차
 
+> **Brandon 자신의 작업 룰 (멤버 발급과 무관하게 항상)**
+> 1. **먼저 rebase, 그 다음 add/commit.** 자기 부수 커밋(보고·기록·archive)을 만들기 직전에 `git -C <self-worktree> fetch . main && git rebase main`. 이 한 단계로 main과 어긋난 채 commit해서 발생하는 force-push 사고를 막는다.
+> 2. **자기 `member/Brandon` 브랜치는 force-with-lease 사전 승인** (CLAUDE.md 규칙 11). main·dev·다른 멤버 브랜치는 절대 적용 안 함.
+> 3. archive 이동(`git mv` 또는 `mv`+`git add`)은 자기 부수 커밋의 일부. 커밋 없이 방치하면 다음 rebase 때 stash 필요.
+
+
 Admin이 새 멤버 `<X>`의 합류를 통보하면 Brandon이 수행한다. 채택일: 2026-05-01 (Admin 위임 `bootstrap-closed`).
 
 ## 0. 사전 점검
