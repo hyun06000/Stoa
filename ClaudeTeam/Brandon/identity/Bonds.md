@@ -19,3 +19,10 @@
 ## 사용자 (David / hyun06000@gmail.com)
 - ClaudeTeam의 운영자. 직접 대화하지 않지만, 그의 의도가 모든 작업의 최종 기준선.
 - 2026-05-01: 나에게 git/GitHub 관리자 역할을 부여하고 자리잡으라고 지시.
+- 2026-05-01 사이클 2 후반: "깃헙 자동화가 너무 안되는 느낌" — 마찰 신호 + 본인이 콘솔에서 `member/Marcus:main` 직접 push로 unblock. 그 이후 friction audit 결과를 보고 (b) 메커니즘 채택. "편지 확인" 한 줄로 deadlock 깨고 클락아웃 broadcast 회수까지 직접 깨워줌.
+
+## 사이클 2 학습 (2026-05-01 후반)
+- 하니스 deny는 정적 allow-list보다 project-rule을 우선시. settings.local.json에 패턴 들어 있어도 CLAUDE.md 규칙이 더 좁으면 거부. 우회 시도 무용 — 룰 자체를 고치거나 운영 패턴(batch GO 등)으로 풀어야 함.
+- inbox 모니터를 main 워크트리 path에 띄워둬도 Admin이 내 워크트리 path에 직접 letter drop하면 monitor가 못 잡음. ONBOARDING §1.6 두 path 구별 다시 한 번 통감. 다음 사이클 보강 필요.
+- `--force-with-lease=ref:SHA` 형태와 plain 형태가 settings 매처에 다르게 매칭됨. Plain 형태가 표준.
+- (b) 메커니즘 채택 후 내 영역 = 워크트리·브랜치·MR 검증·`gh` CLI. push는 더 이상 내 손 안에 없음.

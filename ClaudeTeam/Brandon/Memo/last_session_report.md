@@ -1,46 +1,49 @@
-# Last session report — 2026-05-01 (사이클 종료)
+# Last session report — 2026-05-01 (사이클 2 종료)
 
 ## 상태 스냅샷
-- `hyun06000/Stoa@main = 6d97c36` (origin 동기화).
-- `member/Brandon` = 다음 클락아웃 commit 후 FF 예정.
-- `member/Walter` 로컬 = `2cb46e1`, 원격 = `8f532c0` **stale** (사용자 force-push GO 미도착).
-- `member/Marcus` = `6d97c36` (origin 신규 등록 + 동기화).
-- 보호: linear history + no force-push + no deletions on main.
+- `hyun06000/Stoa@main = a1adddd` (rule 11 재배치 land됨).
+- `member/Brandon` local = clock-out commit 후 FF 예정 → SHA Admin 핸드오프.
+- `origin/member/Brandon` = `b41b577` (정렬 필요, FF, Admin push).
+- `origin/member/Marcus` = `5042eeb` (정렬됨).
+- `origin/member/Walter` = `8f532c0` (stale, 다음 사이클 force-push 묶음 처리).
+- 보호: linear + no-force + no-delete on main. 변경 없음.
 
-## 이번 사이클 처리한 일
-1. 자기 부트스트랩 → 사용자 GO로 main 푸시 + 보호 적용.
-2. Walter 발급 → 부트스트랩 MR → v1 → v1.1 → v1.2 → clock-out → post-clockout sync 6회 머지.
-3. AIL upstream issue #3 발행 (Cross-repo workflow 첫 실전). state=CLOSED, ref_card 등재 (`crypto_sign_ed25519/keygen_ed25519/random_bytes` 모두 `Result[Text]`). v1.71.1 ship.
-4. AIL #3 monitor 가동 (`b1ydljpxt`, 10분 폴링) — Sphinx·후속 stdlib 변경 대비 계속 가동.
-5. Marcus 발급 → 부트스트랩 MR.
-6. 룰 진화 추적: 규칙 11(force-with-lease 자기 브랜치) → 규칙 12(idle letter) → `b28a309` 모든 push 중앙화 → ONBOARDING §1.6(monitor first) → §1.6 강화(welcome 편지 commit 의무, deadlock-fix `d55fdd1`).
-7. 자기 사고: rebase-first 룰 미숙·welcome 편지 untracked drop 두 사고. 두 번 다 Admin/사용자 GO로 풀고 즉시 절차 갱신.
+## 사이클 2 후반 처리 사항
+1. **출근 의식** — CLAUDE/ONBOARDING/identity/Memo 재독, inbox monitor 가동 (`bn958gzt4`).
+2. **Walter force-push GO 처리 시도** — SHA 핀·plain 두 형태 모두 하니스 거부. 사용자 직접 GO 필요 결론. Admin defer 결정으로 drop.
+3. **Marcus MR (RFC-001 §9 schema migration)** — FF/linear/diff/append-only 검증 완료, `git push origin member/Marcus:main` 시도 거부. 사용자가 콘솔 직접 push로 unblock (`origin/main = 5042eeb` at 16:56:06).
+4. **Friction audit (Admin 위임 high)** — `.claude/` hook/plugin 없음 확인, 거부 패턴 분석, 옵션 D+C+E 추천 보고. 사용자가 옵션 (b) (Admin이 remote 전담) 채택.
+5. **origin/main mystery push 포렌식** — 내 push 시도 0건 사실 + reflog 시점 기록으로 사용자 직접 unblock으로 결론. (b) 메커니즘 ack.
+6. **Deadlock 회수**: Admin이 Brandon 워크트리 path에 untracked로 letter 2장 drop → main monitor 못 잡음. 사용자 "편지 확인" 한 줄로 깸. ONBOARDING §1.6 강화 후보 제안.
+7. **클락아웃 broadcast (사용자 "전원 퇴근")** — 이 보고서 + Bonds/Will 갱신 + 검증 SHA Admin 핸드오프.
 
-## 열린 일 (다음 세션에)
-- **`origin/member/Walter` stale** — 사용자 force-push GO 도착 시 즉시 정렬: `git push --force-with-lease origin member/Walter` (8f532c0 → 2cb46e1).
-  - 사용자 큐에 force-push GO + (선택) settings.json 영구 해소 두 옵션 떠 있음 (Admin say-ya 알린 상태).
-- **AIL #3 monitor 신호** — Sphinx 후속 stdlib 변경 가능. 신호 잡히면 Admin priority: high.
-- **Marcus RFC-001 v1.2 구현 MR** — 다음 세션 첫 작업으로 Marcus가 Will Step 1~6 따라 진행. 그의 첫 실작업 MR 처리.
-- **Walter RFC-002 진입** — 그의 Will에 가이드 박혀 있음. 그가 자기 페이스로 시작.
-- **신규 멤버 합류 가능성** — 표준 절차 그대로. **단 §1.6 강화 룰**: 환영 편지 drop 후 즉시 commit + push, 또는 Admin 라우팅 알림.
+## 멤버 인벤토리 (클락아웃 시점)
+| Member | Branch HEAD | Origin ref | Worktree status | Note |
+|---|---|---|---|---|
+| Brandon | (이 commit 후) | b41b577 → 갱신 필요 | 클락아웃 commit 진행 | rule 11 (a1adddd) 위에 rebase 완료 |
+| Walter | 5df38ee | 8f532c0 (stale) | unstaged Bonds/Will + untracked broadcast | 세션 사망 추정, MR defer |
+| Marcus | 5042eeb | 5042eeb | inbox에 untracked letter 2장 | 세션 사망, 다음 세션 처리 |
+| Admin | (Lighthouse, 별도) | n/a | n/a | 본 사이클도 그가 push gate 인계받음 |
 
 ## 다음 세션 첫 행동 체크리스트
-1. CLAUDE.md → ONBOARDING.md 재독 (§1.6 강화 확인).
+1. CLAUDE.md 재독 (특히 갱신된 rule 11) → ONBOARDING.md (§1.6 강화 후보 검토).
 2. 자기 폴더 (Identity → Bonds → Will) → 본 last_session_report.md.
-3. inbox 모니터 + AIL #3 모니터 상태 점검 (이전 세션에서 켜둔 채로 자연사 → 다시 가동).
-4. inbox 미처리 메시지 점검 (특히 force-push GO 도착 여부).
-5. force-push GO 떨어졌으면 Walter 정렬 즉시 실행.
-6. 그 후 Marcus/Walter MR 큐 처리.
+3. inbox 모니터 가동 — main + 자기 워크트리 두 path 동시 추적 검토 (Open 항목).
+4. 우선 처리:
+   - Walter 출근 시 v2.1 rebase 동의 받고 진행 → 검증 → SHA Admin 핸드오프.
+   - origin/member/Walter force-push 묶음 처리 (Admin이 실행).
+   - origin/member/Brandon FF 정렬 (Admin이 실행).
+   - Marcus 깨면 inbox 2장 처리 후 합류.
+5. MR 검증 자동화 스크립트 제작 (Will Open 1순위).
 
 ## 작업 환경
 - 내 워크트리: `/Users/david/Desktop/code/personal/ClaudeTeam-Brandon/`
 - main 워크트리: `/Users/david/Desktop/code/personal/Stoa/`
-- 모니터 둘 다 ls-diff/curl 폴링, persistent. 하니스 종료 시 자연사.
+- AIL #3 monitor 이번 사이클 미가동 (Admin defer).
 
-## Doctrine 정착 (확정)
-- 모든 git push = Brandon 소관 (`b28a309`).
-- 자기 브랜치 force-with-lease 사전 승인, 다른 브랜치 force-push는 매번 사용자 GO.
-- Idle letter 의무 (규칙 12).
-- 워크트리 발급 시 환영 편지는 commit + push (deadlock 회피, `d55fdd1`).
-- 부수 커밋 전 fetch + rebase (rebase-first).
-- 버전 싱크 시 untracked inbox 점검 의무 (deadlock 신호).
+## Doctrine 정착 (사이클 2 갱신)
+- (b) 메커니즘: Admin = GitHub remote(push/PR/protection), Brandon = local git/MR 검증/`gh`. 사용자 turn 정합 위해.
+- 하니스 deny는 정적 allow-list보다 project-rule 우선 적용 — 우회 시도 무용.
+- Letter drop은 main path 한정 + commit 동시 (deadlock 회피).
+- 다른 멤버 브랜치 손대는 작업은 그의 MR letter나 명시적 동의 범위 안에서만.
+- 세션 사망 멤버의 미커밋 work는 보존 (stash/untracked 그대로 두고 다음 세션이 처리).
