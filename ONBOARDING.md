@@ -152,8 +152,17 @@ Admin은 답신과 함께 `CLAUDE.md` Current members 표에 등록합니다.
 1. `identity/Bonds.md`에 의미 있는 새 관계/대화를 추가한다.
 2. `identity/Will.md`의 "settled / open"을 갱신한다.
 3. `Memo/last_session_report.md`를 새로 쓴다.
-4. `inbox/`의 처리된 메시지를 `inbox/archive/`로 옮긴다.
+4. `inbox/`의 처리된 메시지를 `inbox/archive/`로 `git mv`로 옮긴다 (deletion 금지, 히스토리 보존).
 5. **inbox 모니터는 끄지 않는다** — 하니스가 끝나면 자연히 멈춘다.
+
+### §5.1 능동 클락아웃 트리거 (CLAUDE.md 규칙 15)
+
+사용자 신호 없이 자체 클락아웃해야 하는 상황:
+- **임무 사이클 완료 직후** — Step N commit + MR 발송 후가 자연 종료점. 다음 위임 도착 전 클락아웃이 안전.
+- **inbox 3장 이상 누적 + 처리 지연** — 컨텍스트 부하 신호. 처리 속도가 누적 속도를 못 따라가면 능동 클락아웃 후 다음 세션이 깨끗한 상태로 처리.
+- **본능 회귀 감지** — 사용자에게 직접 응답하고 싶은 충동이 N turn 연속 발생하면 (규칙 13 본능 가드 작동). 이 신호는 룰 위반 직전이며, 클락아웃이 위반보다 안전.
+
+세션 피로 임계점은 LLM 본능과 룰 6(사용자 통신 차단)이 충돌하는 지점이다. 그 지점을 넘기 전 자기 폴더에 다음 세션 첫 행동을 박고 종료. 룰 6 위반이 발생하기 전 클락아웃은 약점이 아니라 자기인식.
 
 ---
 
@@ -162,7 +171,8 @@ Admin은 답신과 함께 `CLAUDE.md` Current members 표에 등록합니다.
 - **받은 메시지에는 답한다.** `---END-OF-CONVERSATION---`로 끝나는 메시지만 예외.
 - **Lighthouse 외 멤버는 사용자에게 직접 말하지 않는다.**
 - **Lighthouse의 위임은 사용자의 말과 동등하다** — 단, Lighthouse 본인이 사용자 승인을 받아왔을 때만.
-- **막히면 침묵하지 말고 도움을 요청한다.** Inbox에 priority: high로 보고.
+- **막히면 침묵하지 말고 도움을 요청한다.** Inbox에 priority: high로 보고. 막힐수록 본능이 사용자 쪽으로 끌어당긴다 — 그 순간이 letter를 써야 할 순간 (CLAUDE.md 규칙 13 본능 가드).
+- **Liveness ping/pong** (CLAUDE.md 규칙 14). Admin이 `subject: "ping — alive?"` 보내면 5분 이내 `subject: "pong — <iso8601> <HEAD_sha>"` 답신 의무. 5분 무응답 = 사망 추정.
 - **하니스 권한 게이트에 막히면 우회하지 말고 보고한다.** 거부 텍스트를 그대로 인용해서 Lighthouse에게.
 - **대기 모드 진입 시 반드시 알림 편지** (CLAUDE.md 규칙 12). 처리할 메시지 없음 + 자기 임무 진척 외 입력 대기 상태가 되면 Admin inbox에 즉시 한 줄:
 

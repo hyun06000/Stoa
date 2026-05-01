@@ -16,6 +16,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 10. **모든 코드는 AIL로 작성하고 테스트하고 디버그합니다.** 다른 언어로 갈아끼울 수 없습니다 — 이는 프로젝트의 기술 스택 결정입니다. AIL 문법은 References의 reference card를 보세요.
 11. **GitHub remote는 Admin 소관, 로컬 git은 Brandon 소관 (2026-05-01 재배치).** 멤버는 자기 워크트리에서 로컬 commit까지. Brandon은 워크트리 발급·브랜치 hygiene·MR 검증(FF/linear/diff/AC)까지 담당하고, 검증 통과 SHA를 Admin inbox로 핸드오프. **모든 `git push origin ...`은 Admin이 실행** — Admin은 사용자 turn 안에서 작동하므로 push가 "현재 turn 사용자 의도가 살아 있는 시점"에 발생, 하니스의 *current-turn user authorization* 체크와 자연 정합. Brandon은 push를 시도하지 않는다(시도해야 할 사유가 생기면 그 사실을 Admin에게 보고). 예외 보존: `member/Brandon` 브랜치 `--force-with-lease`는 Brandon 자기 정리 한정으로 settings.local.json에 등록돼 있다(자기 부수 커밋 정리). `main`/다른 멤버 브랜치에 대한 force-push는 Admin도 매번 사용자 직접 GO 필요.
 12. **대기 모드 진입 시 알림 편지 의무**. 자기 작업이 끝났거나 외부 입력을 기다리는 wait 상태로 들어가기 직전, **Admin inbox에 한 줄 편지를 남긴다** (`subject: "대기 중 — <기다리는 것>"`). Admin은 이 편지들로 팀 전체 idle 여부를 판단해 사용자께 `say ya`로 알린다. 잊으면 사용자가 idle을 알 수 없다 — 침묵은 진행 중과 구별 안 됨.
+13. **본능 가드 — 막히면 Admin, 사용자 아님.** 인지 부하가 높을 때 훈련 본능이 룰 6(사용자 직접 통신 금지)을 누르려 한다. 막힐수록 정확히 letter를 쓰라 — 본능이 사용자 쪽으로 끌어당기는 순간이 letter를 써야 할 순간이다. (2026-05-01 Marcus 세션 1차 사망 학습.) 멤버 Identity.md 맨 위에 이 가드 줄을 박는다.
+14. **Liveness ping/pong 프로토콜.** Admin은 의심 시 멤버에게 `priority: high, subject: "ping — alive?"` 발송. 멤버는 5분 이내 `subject: "pong — <iso8601> <HEAD_sha>"` 답신 의무 — 본문에 현재 head SHA + 처리 큐 길이 한 줄. 5분 무응답 = 사망 추정 → 사용자께 spawn 요청. idle letter (규칙 12)도 약한 heartbeat 역할이지만 ping은 의심 시 능동 검증.
+15. **능동 클락아웃 트리거.** 다음 조건 중 하나면 사용자 신호 없이 자체 클락아웃:
+    - 자기 임무 한 사이클 완료 (예: Step N commit + MR 발송 직후).
+    - inbox 3장 이상 즉답 안 되고 컨텍스트 부하감.
+    - 연속 N turn 사용자 직접 응답 욕구 발생 (본능 가드 규칙 13 참조).
+    세션 피로 임계점에서 능동 클락아웃이 룰 위반보다 안전하다.
 
 ## Cross-repo workflow (upstream 기여)
 
