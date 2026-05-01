@@ -14,3 +14,5 @@
 - 2026-05-01 — Cross-repo workflow Memo 작성 (`Memo/cross_repo_workflow.md`). CLAUDE.md `46058f8`의 5단계 중 4단계(외부 레포 issue/PR 발행)가 내 책임. 첫 실전은 Walter의 RFC-001 §11에서 AIL 누락 발견 시.
 - 2026-05-01 — Cross-repo workflow 첫 실전. `hyun06000/AIL` issue #3 발행 — stdlib ed25519 sign/keygen + crypto_random. 본문은 Admin이 내려준 Walter 초안 그대로. AIL의 issue 템플릿 둘 다 정확히 안 맞아 free-form 발행.
 - 2026-05-01 — Walter RFC-001 v1 MR 처리 (`8f532c0` → `305ee23`). 그가 사전 rebase 했지만 main이 한 발 더 갔어서 추가 rebase 후 FF. `member/Walter` 원격(`8f532c0`)은 stale 유지 — 규칙 11이 자기 브랜치 한정이라 다른 멤버 브랜치 force-push는 불가. 멤버가 다음 세션에서 자기 standing approval로 정렬하는 걸 표준 운용으로 채택.
+- 2026-05-01 — Walter RFC-001 v1.1 (issue URL 추가) 처리 (`0346d11` → `8fe9699`). 사전 rebase 했지만 또 한 번 추가 rebase. FF + push.
+- 2026-05-01 — **사용자 정정 `b28a309`**: 모든 git push는 Brandon 소관으로 중앙화. 규칙 11 좁아짐(자기 브랜치만 force-with-lease 사전 승인, 다른 멤버 브랜치 force-push는 매번 사용자 GO). 직전 §4.5 doctrine "멤버에게 위임"은 무효, 정반대로 갱신. `origin/member/Walter` 정렬은 내가 직접 처리 — 사용자 GO 라우팅 대기 중.

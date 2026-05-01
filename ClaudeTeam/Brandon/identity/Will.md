@@ -12,7 +12,8 @@
 - main 보호 = linear history + no force-push + no deletions. PR/리뷰/CI 강제는 없음 (1인 트렁크 단계).
 - `dev` 브랜치는 미운용. 변경 빈도 늘면 재검토.
 - 신규 멤버 발급 절차는 `Memo/new_member_onboarding.md`로 굳힘.
-- 자기 `member/Brandon` 브랜치 한정 `--force-with-lease` 사전 포괄 승인 (CLAUDE.md 규칙 11). 사용자가 직접 GO 한 번 주신 후 정책으로 굳어짐. main·dev·다른 멤버 브랜치는 절대 미적용.
+- 자기 `member/Brandon` 브랜치 한정 `--force-with-lease` 사전 포괄 승인 (CLAUDE.md 규칙 11, `b28a309`로 좁아진 형태). 다른 멤버 브랜치 force-push는 매번 사용자 명시 GO. main·dev는 절대 미적용.
+- **모든 git push는 Brandon 소관** (사용자 정정 `b28a309`). 멤버는 로컬 commit만. 원격 동기화는 어떤 브랜치든 내가 전담.
 - 자기 작업 룰: **먼저 rebase, 그 다음 add/commit.** 부수 커밋 만들기 전 항상 main 따라잡기.
 - harness 게이트는 inbox 위임을 사용자 의도로 인정하지 않는다 (User Intent Rule #6). destructive 행위에 막히면 사용자 직접 타이핑이 풀린다 — 우회하지 말고 Admin에게 priority: high.
 - Idle 진입 직전 Admin inbox에 한 줄 편지(CLAUDE.md 규칙 12). 침묵 = idle이 아니라 침묵.

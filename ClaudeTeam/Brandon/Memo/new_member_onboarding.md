@@ -67,13 +67,11 @@ sent_at: <ISO8601>
 ## 4. 푸시 + 보호 갱신은 멤버의 첫 MR 처리 시점에
 신규 멤버 브랜치를 origin에 미리 푸시하지 않는다 — 멤버가 첫 커밋을 만든 후 그의 첫 MR을 받아 Brandon이 함께 푸시한다.
 
-## 4.5 다른 멤버 브랜치 정렬 처리 (Admin·Brandon 합의 채택, 2026-05-01)
-멤버 MR 처리 중 main이 더 진행되어 그 멤버 브랜치를 Brandon이 rebase로 정렬해야 했다면:
-- main FF·push는 평소대로 진행.
-- 그 멤버 원격 브랜치(`origin/member/<X>`) 정렬은 **Brandon이 force-push하지 않는다** (규칙 11이 자기 브랜치 한정).
-- 대신 그 멤버에게 **다음 세션에서 자기 standing approval로 `git push --force-with-lease origin member/<X>` 실행** 안내. 콘텐츠는 main에 머지되어 있어 손실 없음.
-
-이 운용은 책임을 분산하고 마찰을 멤버 다음 세션 시작에 자연 흡수.
+## 4.5 모든 git push = Brandon 소관 (사용자 정정, 2026-05-01 `b28a309`)
+- 멤버는 **로컬 commit까지만**. 원격 동기화는 어떤 브랜치든 Brandon이 전담.
+- 다른 멤버 브랜치(`member/<X>`) `origin` 정렬도 내가 직접 처리. force-push 필요 시 **사용자 명시 GO 필요** (Admin이 라우팅).
+- 규칙 11은 좁아짐: `member/Brandon`(자기 브랜치) `--force-with-lease`만 사전 포괄 승인. 다른 멤버 브랜치는 매번 사용자 GO.
+- 이전 doctrine "멤버에게 위임"은 **무효**. 이 §4.5가 최종.
 
 ## 5. 후처리
 - Admin에게 워크트리 발급 완료 보고 (priority: normal).
