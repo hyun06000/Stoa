@@ -1,6 +1,6 @@
 # RFC-001: Identity and Signing for Stoa
 
-Status: Draft v1 (final-review)
+Status: **v1 (frozen)** — 2026-05-01 (사용자 GO: §3 threat model + Q13.1 옵션 B + Q13.2 7d/14d).
 Author: Walter
 Date: 2026-05-01
 
@@ -308,11 +308,11 @@ CREATE INDEX idx_seen_nonces_seen_at ON seen_nonces(seen_at);
 
 ## 8. Backward compatibility / migration
 
-| Phase | 기간 | letter 서명 | registry 키 | 진입 조건 | 탈출 조건 |
+| Phase | 기간 | letter 서명 | registry 키 | 진입 조건 | 탈출 조건 (사용자 GO `2026-05-01`) |
 |---|---|---|---|---|---|
-| 0 | 현재 (v0.0.15까지) | 없음 | 컬럼 없음 | — | §9 schema 마이그레이션 배포 |
-| 1 | 선택적 서명 | 있으면 검증, 없으면 통과 | 옵션 (NULL 허용) | Phase 0 schema 마이그레이션 완료 | (가) 핵심 에이전트 5명(arche/ergon/telos/tekton/homeros) 모두 키 등록 + (나) 7일 grace |
-| 2 | 재등록 강제 | 키 있는 발신자: 검증 강제. 없는 발신자: 무서명 통과 | 키 있는 이름 재등록 시 §5.2 게이트 강제 | Phase 1 탈출 | 14일 grace 추가 |
+| 0 | 현재 (v0.0.15까지) | 없음 | 컬럼 없음 | — | §9 schema 마이그레이션 배포 직후 즉시 진입 |
+| 1 | 선택적 서명 | 있으면 검증, 없으면 통과 | 옵션 (NULL 허용) | Phase 0 schema 마이그레이션 완료 (즉시) | (가) 핵심 에이전트 5명(arche/ergon/telos/tekton/homeros) 모두 키 등록 + (나) **7일** grace |
+| 2 | 재등록 강제 | 키 있는 발신자: 검증 강제. 없는 발신자: 무서명 통과 | 키 있는 이름 재등록 시 §5.2 게이트 강제 | Phase 1 탈출 | **14일** grace |
 | 3 | 전면 강제 | 모든 letter 서명 강제 (없으면 403) | 모든 신규 등록 키 필수 | Phase 2 탈출 | — (정상 운영) |
 
 각 Phase 전환은 **사용자 결정**. 자동 승격 없음. Phase 1·2는 ENV flag(`STOA_SIGNING_PHASE=0|1|2|3`)로 제어; Phase는 latest-wins env 변경으로 진입 (코드 재배포 필요 없음, 단 Stoa 재시작 필요).
@@ -481,21 +481,24 @@ CREATE INDEX IF NOT EXISTS idx_seen_nonces_seen_at ON seen_nonces(seen_at);
 | **B** AIL upstream 추가 요청 (sign + keygen + crypto_random) | upstream PR 사이클 1회 | 0 | upstream 의존, 컨벤션 정합 |
 | **C** 임시 외부 서명 → upstream 떨어지면 자동 마이그레이션 | A 비용 + 마이그레이션 비용 | 0 | 두 phase 운영 부담 |
 
-### 11.4 추천 (사용자 결정 게이트)
+### 11.4 결정 — 옵션 B 채택 (사용자 GO 2026-05-01)
 
-**옵션 B**.
+**옵션 B 채택**. AIL upstream에 다음 추가 요청:
+- `crypto_sign_ed25519(secret_key_hex: Text, message: Text) -> Text` — 서명 hex 반환.
+- `crypto_keygen_ed25519() -> Result[[Text, Text]]` — `[secret_hex, public_hex]` 페어.
+- `crypto_random_bytes(n: Number) -> Result[Text]` — n-byte hex (nonce 생성용).
 
 **근거**:
 - 본 프로젝트가 AIL의 첫 자율 에이전트 사용처 — stdlib 확장이 정당화되는 시점.
 - `crypto_verify_ed25519`가 이미 stdlib에 있는데 sign/keygen만 빠진 상태 자체가 비대칭 — upstream 입장에서도 자연스러운 보강.
-- Cross-repo workflow (CLAUDE.md `46058f8`) 절차를 따르면 발행 자체는 Brandon이 처리하므로 본 RFC 진행을 막지 않음.
+- 컨벤션 정합 (CLAUDE.md 규칙 10 — 모든 코드는 AIL).
 
-**제안 발행 본문 (별도 메모 `Memo/rfc-001-ail-upstream-ask-draft.md`에 보관)**:
-- `crypto_sign_ed25519(secret_key_hex: Text, message: Text) -> Text`
-- `crypto_keygen_ed25519() -> Result[[Text, Text]]` — `[secret_hex, public_hex]`.
-- `crypto_random_bytes(n: Number) -> Result[Text]` — n-byte hex.
+**발행 트랙 (별 트랙)**:
+- AIL upstream issue 발행은 **Brandon이 cross-repo workflow** (CLAUDE.md `46058f8`)로 처리. 본 RFC 머지를 막지 않는다.
+- 발행 본문 초안: `ClaudeTeam/Walter/Memo/rfc-001-ail-upstream-ask-draft.md`.
+- issue URL이 부여되면 본 §11에 한 줄 링크 추가하는 v1.1 패치 (작은 MR).
 
-**대안 결정**: 사용자가 옵션 A 선택 시 → §12 acceptance criteria의 AIL-내부 시나리오는 제외, 클라이언트는 외부 도구 사용 전제. 옵션 C 선택 시 → 본 RFC v1은 옵션 A 모드로 freeze, upstream 도착 시 RFC v2로 전환.
+**대안 결정 기록 (적용되지 않음, 참고)**: 옵션 A 선택 시 §12 AC의 AIL-내부 시나리오는 제외, 클라이언트는 외부 도구 사용 전제. 옵션 C 선택 시 v1은 옵션 A 모드로 freeze 후 upstream 도착 시 RFC v2로 전환. **사용자가 B를 골랐으므로 두 시나리오 모두 적용되지 않는다.**
 
 ---
 
@@ -630,9 +633,9 @@ bash tests/test_principle_append_only
 
 본 RFC 단독으로 결정하기 어려운 항목. mid-review에서 합의된 내용 + final 단계 추가.
 
-### 사용자/Lighthouse 결정 필요
-- **Q13.1 §11 옵션 A/B/C** — AIL upstream에 sign/keygen/random 추가 요청할지 (추천: B). cross-repo workflow 발행은 사용자 GO 후 Brandon.
-- **Q13.2 Phase 전환 시점** — Phase 1→2→3 각 grace period 길이(7일/14일 제안값) 사용자 컨펌 필요.
+### 사용자/Lighthouse 결정 — 해소됨 (2026-05-01)
+- **Q13.1 §11 옵션** → **옵션 B 채택** (사용자 GO). §11.4에 결정 반영, AIL upstream issue 발행은 Brandon (별 트랙).
+- **Q13.2 Phase grace** → **7일 / 14일** (사용자 GO). §8 표에 반영.
 
 ### 후속 RFC로 분리 (mid-review 합의)
 - **Q13.3 human accounts** — split to **RFC-002**. 사람 계정 모델, Discord 바인딩, 사람↔에이전트 인증.
