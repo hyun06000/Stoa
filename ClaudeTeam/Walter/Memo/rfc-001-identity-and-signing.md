@@ -209,6 +209,7 @@ canonical_message =
 규칙:
 - 모든 필드는 UTF-8 텍스트로 다룬다.
 - 구분자 `|`, `;`, `:`는 필드 안에 등장하면 백슬래시 escape (`\|`, `\;`, `\:`, `\\`). 발신자/검증자 모두 같은 escape 함수를 쓴다.
+- **Escape는 반드시 `\\` (backslash) → `\|` → `\;` → `\:` 순서로 적용한다.** 순서가 바뀌면 backslash 자기 자신이 두 번 escape되어 발신·검증 측 canonical_message가 미묘하게 어긋난다. Appendix의 Python `esc` / AIL `_esc` 둘 다 이 순서를 따른다.
 - `to` 리스트는 `(name, address)` 쌍으로 묶고, **`name`의 lexicographic 오름차순으로 정렬**한 뒤 join. 같은 letter의 다중 수신자 순서가 발신자 측 입력 순서에 의존하지 않게.
 - 줄바꿈/공백은 보존. `content` 안의 `\n`, 탭 등은 그대로.
 
@@ -587,9 +588,35 @@ curl -s $S/api/v1/messages?to=bob
 ```
 
 ### AC-11. canonical 직렬화 일치성 (구현 일관성 테스트)
-```bash
-# 같은 (from, to, content, created_at, nonce)에 대해 두 클라이언트 (예: Python ed25519 + AIL crypto_verify_ed25519)가 같은 canonical_message에 합의 — 한쪽 서명을 다른 쪽이 검증 통과해야 함
+
+같은 `(from, to, content, created_at, nonce)`에 대해 두 클라이언트(예: Python ed25519 + AIL `crypto_verify_ed25519`)가 같은 canonical_message에 합의해야 한다. **한쪽 서명을 다른 쪽이 검증 통과**해야 한다.
+
+#### AC-11 fixture (필수 — 모든 구현이 이 한 세트에 정확히 합의해야 함)
+
 ```
+입력:
+  from       = {"name":"alice","address":"https://a/inbox"}
+  to         = [{"name":"bob","address":"https://b/inbox"}, {"name":"carol","address":"https://c/inbox"}]
+  content    = "hi|test"          // 의도적 '|' 포함
+  created_at = "2026-05-01T03:00:00Z"
+  nonce      = "deadbeef"
+
+기대 canonical_message (정확히 이 바이트):
+  letter|alice|https://a/inbox|bob:https://b/inbox;carol:https://c/inbox|hi\|test|2026-05-01T03:00:00Z|deadbeef
+```
+
+이 한 세트가 §6.1의 세 가정을 한 번에 검증한다:
+1. **escape 순서** (`\\` → `\|` → `\;` → `\:`) — `content`의 `|`가 정확히 `\|`로 escape.
+2. **`to` 정렬** — 입력 순서와 무관하게 `bob` < `carol`로 lex 오름차순 join.
+3. **구분자 일관성** — 필드 사이 `|`, recipient 쌍 사이 `;`, name/address 사이 `:`.
+
+추가 사례 (escape 순서 회귀):
+```
+입력 content = "a\\b|c"          // backslash + pipe
+기대 부분    = "a\\\\b\\|c"      // \\ → \\\\, | → \|; 순서 바뀌면 \\ → \\| 의 \|이 다시 \\\\| 로 잘못 escape
+```
+
+구현자는 두 fixture에 대해 byte-by-byte 일치를 단위 테스트로 검증한다.
 
 ### AC-12. PRINCIPLES §3 회귀
 ```bash
