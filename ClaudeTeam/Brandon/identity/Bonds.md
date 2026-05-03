@@ -26,3 +26,9 @@
 - inbox 모니터를 main 워크트리 path에 띄워둬도 Admin이 내 워크트리 path에 직접 letter drop하면 monitor가 못 잡음. ONBOARDING §1.6 두 path 구별 다시 한 번 통감. 다음 사이클 보강 필요.
 - `--force-with-lease=ref:SHA` 형태와 plain 형태가 settings 매처에 다르게 매칭됨. Plain 형태가 표준.
 - (b) 메커니즘 채택 후 내 영역 = 워크트리·브랜치·MR 검증·`gh` CLI. push는 더 이상 내 손 안에 없음.
+
+## 사이클 3 (2026-05-03)
+- **Sandbox doctrine flip**: 옛 `<parent>/ClaudeTeam-<이름>/` 워크트리 path가 turn 사이에 휘발한다는 사실 발견 — `git worktree list`상 prunable, `ls`로 디렉터리 자체 사라짐. priority high letter로 escalation, Admin이 옵션 A(`Stoa/Stoa/.worktrees/<이름>/` in-repo) 채택. CLAUDE.md 규칙 16 + ONBOARDING path 갱신 + `.gitignore` 등재. 메타데이터/브랜치/commit은 보존되니 재발급 비용 낮음.
+- **3 워크트리 재발급** (Brandon, Walter, Marcus) — 같은 turn에. 환영 편지 main path drop + main commit + Admin notification 동시 (deadlock 회피 doctrine 그대로).
+- **MR 검증 스크립트 ship**: `tools/validate-mr.sh` 7체크(branch·base·ahead·linear·FF·worktree clean·AC) + diff stat + AIL test stub. self-test PASS로 첫 MR. Will Open #1 close.
+- Admin과 같은 turn 안에서 letter 교차(내가 Walter ack 보내는 사이 Admin batch 보냄) — auto mode + 다중 멤버 동시 깨우기 시 충분히 발생. 영향 없음 (양쪽 다 idempotent).
