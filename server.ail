@@ -87,6 +87,9 @@ fn _init_db() -> Any {
         "CREATE TABLE IF NOT EXISTS discord_users (discord_id TEXT NOT NULL, stoa_name TEXT NOT NULL, bound_at TEXT NOT NULL)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_discord_users_id ON discord_users(discord_id)")
+    // Q1 §6.5 hotfix: stoa_name lookup (Web UI POST 차단 분기, _is_human_bound).
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_discord_users_stoa_name ON discord_users(stoa_name)")
     // aliases — alias → canonical 매핑. append-only, latest wins.
     // 예: "에르곤" → "ergon"
     perform db.execute(db,
@@ -988,6 +991,14 @@ fn handle_post_message(req: Any) -> [Any] {
     nonce_v = get(body, "nonce")
     ca_v = get(body, "created_at")
     has_sig_claim = sig_v != None and to_text(sig_v) != ""
+
+    // Q1 §6.5 hotfix — Web UI POST 차단. from.name이 discord_users에 등재된 사람이고
+    // envelope에 attestation(signature) 부재면 401. Discord 사람 letter는 §6 full
+    // (Step 5/6) attestation land까지 일시 정지 default — 같은 분기로 자연 reject.
+    // 401 메시지는 enumeration 방어 위해 통일 ('unauthorized envelope').
+    if _is_human_bound(from_name) and not has_sig_claim {
+        return err_json(401, "unauthorized envelope")
+    }
 
     sender = db_lookup(from_name)
     sender_pk = None

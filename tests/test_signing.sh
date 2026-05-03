@@ -397,6 +397,26 @@ else
     report_fail "AC-12 test_principle_append_only FAIL — $(tail -5 "$TMP/ac12.log")"
 fi
 
+# ─── AC-13: Q1 §6.5 hotfix — Web UI POST 차단 (사람 + 무서명 → 401) ──
+# discord_users에 등재된 from.name이 attestation 부재 letter 보내면 401.
+# enumeration 방어 위해 통일 메시지 'unauthorized envelope'.
+echo "── AC-13: Q1 hotfix human attestation gate ──"
+if command -v sqlite3 >/dev/null 2>&1; then
+    # carol은 AC-9에서 키 없이 등록됨 — discord_users에도 직접 binding.
+    sqlite3 "$TMP/messages.db" "INSERT INTO discord_users (discord_id, stoa_name, bound_at) VALUES ('test_dc_1', 'carol', '$ANCHOR_ISO');" 2>"$TMP/ac13_db.log"
+    code=$(curl -s -o "$TMP/r13.json" -w "%{http_code}" -X POST "$URL/api/v1/messages" \
+        -H "Content-Type: application/json" \
+        -d '{"from":{"name":"carol","address":"http://127.0.0.1:1/carol"},"to":[{"name":"newcomer","address":"http://127.0.0.1:1/x"}],"content":"web ui human attempt"}')
+    if [ "$code" = "401" ]; then
+        msg=$(jval "$TMP/r13.json" "['error']")
+        case "$msg" in *unauthorized*) report_pass "AC-13 human + no attestation → 401 ($msg)" ;; *) report_fail "AC-13 401 but error=$msg (expected unauthorized envelope)" ;; esac
+    else
+        report_fail "AC-13 status=$code body=$(cat "$TMP/r13.json")"
+    fi
+else
+    echo "  ⚠ AC-13 SKIP — sqlite3 CLI 부재"
+fi
+
 echo
 echo "──────────────────────────────────"
 echo "  PASS: $PASS"
