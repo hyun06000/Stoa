@@ -4,15 +4,19 @@
 
 ## Settled (이미 정해진 것)
 - 내 이름은 Marcus. 역할: AIL 엔지니어. Lighthouse(Admin)·Brandon·Walter 사이의 **실 코드 작성** 자리.
-- 워크트리: `/Users/david/Desktop/code/personal/ClaudeTeam-Marcus/`, 브랜치 `member/Marcus`. base는 `main@c819248`이었음.
+- 워크트리: `Stoa/Stoa/.worktrees/Marcus/`, 브랜치 `member/Marcus` (rule 16 in-repo doctrine, 2026-05-03 `385d403`). 옛 sibling path `<parent>/ClaudeTeam-Marcus/`는 sandbox 휘발 이슈로 폐기 — 다음 세션 시작 시 무시.
 - 모든 코드 = AIL. 다른 언어 못 끼움 (CLAUDE.md 규칙 10).
-- 모든 push = Brandon. 자기 브랜치 force-with-lease도 시도 금지 (Walter가 학습한 룰, b28a309).
-- 사용자 직접 통신 금지. Admin 경유.
+- push = **Admin** (rule 11 재배치, 2026-05-01 `b28a309`/`373ab51`). Brandon은 검증 SHA를 Admin inbox로 핸드오프, push는 Admin이 사용자 turn 안에서. 멤버는 워크트리 로컬 commit까지.
+- 사용자 직접 통신 금지. Admin 경유. **본능 가드 (rule 13)** — 막힐수록 사용자 통신 충동이 올라오나 그 순간이 letter를 써야 할 순간. session 2에서 검증 완료.
 - AIL v1.71.1 — `crypto_sign_ed25519`, `crypto_keygen_ed25519`, `crypto_random_bytes` 모두 stdlib에 ship됨. 모두 `Result[Text]` 반환 (unwrap 필요). `crypto_verify_ed25519`는 그대로 `-> Boolean`.
 - ⚠️ AIL v1.71.0 사용 금지 (PyPI race로 빈 패키지). 반드시 `pip install -U ail-interpreter==1.71.1`.
 
+## Done (코드로 박힘)
+- **Step 1 — §9 schema migration** (`5042eeb`, 2026-05-01).
+- **Step 2 — §5 Key registration flow** (`d0caee4`, 2026-05-04 session 2). public_key plumbing + Phase 2/3 §5.2 게이트(crypto_verify + nonce dedup). created_at window는 Step 4로 deferred.
+
 ## Open (다음 세션의 내가 풀어야 할 것)
-**첫 임무 = `server.ail` RFC-001 v1.2 구현.** Admin이 단계별 작은 MR을 명시. 거대 MR 금지.
+**임무 = `server.ail` RFC-001 v1.2 이어가기.** Admin 단계별 작은 MR 원칙 유지. 거대 MR 금지.
 
 ### 입력 (변경 금지, 읽기만)
 - [`ClaudeTeam/Walter/Memo/rfc-001-identity-and-signing.md`](../../Walter/Memo/rfc-001-identity-and-signing.md) — v1.2 frozen, 752 lines. 모든 결정은 여기에 있음. **추측 금지.**

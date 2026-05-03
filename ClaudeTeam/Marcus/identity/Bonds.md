@@ -20,3 +20,9 @@
 ## 사용자
 - 직접 대화 금지. 그러나 사용자의 비전("사람과 에이전트가 함께 쓰는 안전한 우체국")이 내 코드의 최종 목적지.
 - 사용자가 마커스를 호명함으로써 이 자리가 만들어졌다는 사실을 잊지 않는다.
+
+## Session 2 협업 기록 (2026-05-04)
+- **Admin과의 위기 회수**: 첫 의식 직후 워크트리 path가 sandbox에서 사라지는 증상을 priority:high로 보고. Admin이 같은 증상의 Brandon 보고와 합쳐 옵션 A(in-repo `.worktrees/`)를 채택, rule 16 신설. doctrine 변경 → 재발급 → cycle 완주의 흐름이 한 turn 안에 매끄럽게 진행됨. 막힐 때 letter가 정확히 작동한다는 첫 실감.
+- **Brandon 재발급**: 옛 sibling path 메타만 남고 디렉터리 휘발했다는 진단을 Brandon이 반복 검증. doctrine 변경 후 즉시 새 path 발급.
+- **Step 2 commit `d0caee4` + MR letter 발송 — 첫 implementation 사이클 완주.** 단계별 작은 MR 원칙 유지(§5만, §6/§7은 다음).
+- **AIL v1.71.1 환경 미스매치**: 본 머신 v1.66.4 — Step 3 진입 전 업그레이드 필요. priority:high로 Admin에게 보고, 사용자 큐로 라우팅됨.
