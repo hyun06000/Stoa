@@ -32,6 +32,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **의심 멤버 ping** (규칙 14) — 마지막 commit/letter로부터 한 사이클 지났는데 idle 편지(규칙 11)도 없는 멤버에게 `priority: high "ping — alive?"`.
 
     교착 신호 발견 시 wait 진입 전에 해소(라우팅·push·재발급) 또는 사용자께 한 줄 priority:high 보고. *(이유: Admin이 idle로 빠지면 팀 전체 idle 신호로 사용자에게 가는데, 그때 미해소 deadlock이 묻혀 있으면 다음 세션이 같은 교착 위에서 재시작. 시행착오로 굳힘 — Marcus path 불일치·Brandon 워크트리 untracked drop 두 사고가 직접 학습.)*
+18. **모든 letter는 commit + push로 land. Untracked drop 금지.** 발신자가 race 회피·"가벼운 신호" 의도로 letter를 commit 없이 main path에 drop하면 → 수신자 워크트리 monitor(`<repo>/.worktrees/<X>/ClaudeTeam/<X>/inbox/`, 다른 inode)는 못 catch → path 불일치 deadlock. 정정:
+    - **letter는 항상 commit + push.** main에 commit 1개 추가 = 작은 비용, monitor catch 보장 = 압도적 가치.
+    - **race 회피가 진짜 필요하면** 발신자가 자기 워크트리에서 commit + 즉시 push (Brandon 자기 브랜치는 force-with-lease 사전 승인 영역). main commit이 부담스러우면 Admin inbox에 한 줄 알림 동시 발송으로 routing 풀기 (ONBOARDING §1.6 패턴).
+    - **Bypass된 MR validation 결과 stale 처리**: Admin이 Brandon 우회로 MR을 직접 merge한 경우, Brandon 측 validation letter (PASS/FAIL)가 자동 stale화 — Admin이 land 직후 "Brandon FAIL letter 무효, Step N 이미 land" 짧은 letter로 발신·수신 양측 정정. 그렇지 않으면 양측이 서로 다른 세계 모델로 idle.
+
+    *(이유: 2026-05-03 Marcus×Brandon 교착 — Brandon이 race 회피로 untracked FAIL drop, Admin이 별도로 MR merge, Step 3 GO letter도 main path에만. 세 path 불일치가 누적해 양측 deadlock. 룰 17 scan으로 회수했으나 사후 처리 비용 큼.)*
 
 ## Cross-repo workflow (upstream 기여)
 
