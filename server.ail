@@ -59,6 +59,24 @@ fn _init_db() -> Any {
     if not pk_present {
         perform db.execute(db, "ALTER TABLE registry ADD COLUMN public_key TEXT")
     }
+    // RFC-001 §6.5 envelope 보존 (read 경로). letters에 signature/nonce 컬럼 추가 —
+    // POST 응답뿐 아니라 GET inbox/all에서도 envelope이 그대로 회수돼야 §6.5 충족.
+    // 컬럼 추가는 row 변경 아니라 PRINCIPLES §3 양립.
+    sig_present = false
+    nonce_present = false
+    li = perform db.query(db, "PRAGMA table_info(letters)", [])
+    if not is_error(li) {
+        for row in unwrap(li) {
+            if row[1] == "signature" { sig_present = true }
+            if row[1] == "nonce" { nonce_present = true }
+        }
+    }
+    if not sig_present {
+        perform db.execute(db, "ALTER TABLE letters ADD COLUMN signature TEXT")
+    }
+    if not nonce_present {
+        perform db.execute(db, "ALTER TABLE letters ADD COLUMN nonce TEXT")
+    }
     // seen_nonces — RFC-001 §7.3 / §9.2. append-only, INSERT only.
     perform db.execute(db,
         "CREATE TABLE IF NOT EXISTS seen_nonces (from_name TEXT NOT NULL, nonce TEXT NOT NULL, seen_at TEXT NOT NULL, PRIMARY KEY (from_name, nonce))")
@@ -363,11 +381,12 @@ fn validate_envelope(body: Any) -> Any {
 
 // ---------- INSERT only (no UPDATE / no DELETE in this file) ----------
 
-fn db_insert_letter(msg_id: Text, from_name: Text, from_address: Text, content: Text, created_at: Text) -> Any {
+// signature/nonce는 None 허용 (Phase 0/1 무서명 letter, grandfather sender).
+fn db_insert_letter(msg_id: Text, from_name: Text, from_address: Text, content: Text, created_at: Text, signature: Any, nonce: Any) -> Any {
     db = get_db_file()
     return perform db.execute(db,
-        "INSERT INTO letters (id, from_name, from_address, content, created_at) VALUES (?, ?, ?, ?, ?)",
-        [msg_id, from_name, from_address, content, created_at])
+        "INSERT INTO letters (id, from_name, from_address, content, created_at, signature, nonce) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [msg_id, from_name, from_address, content, created_at, signature, nonce])
 }
 
 fn db_insert_recipient(letter_id: Text, name: Text, address: Text) -> Any {
@@ -398,12 +417,18 @@ fn db_load_recipients(letter_id: Text) -> [Any] {
 
 fn _row_to_envelope(row: Any) -> Any {
     msg_id = row[0]
+    sig = None
+    nce = None
+    if length(row) > 5 { sig = row[5] }
+    if length(row) > 6 { nce = row[6] }
     return make_record([
         ["id", msg_id],
         ["from", make_record([["name", row[1]], ["address", row[2]]])],
         ["to", db_load_recipients(msg_id)],
         ["content", row[3]],
-        ["created_at", row[4]]
+        ["created_at", row[4]],
+        ["signature", sig],
+        ["nonce", nce]
     ])
 }
 
@@ -411,7 +436,7 @@ fn db_get_letter(msg_id: Text) -> Any {
     _init_db()
     db = get_db_file()
     r = perform db.query(db,
-        "SELECT id, from_name, from_address, content, created_at FROM letters WHERE id = ? LIMIT 1",
+        "SELECT id, from_name, from_address, content, created_at, signature, nonce FROM letters WHERE id = ? LIMIT 1",
         [msg_id])
     if is_error(r) { return None }
     rows = unwrap(r)
@@ -425,11 +450,11 @@ fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
     r = None
     if since_id == "" {
         r = perform db.query(db,
-            "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? ORDER BY l.rowid DESC LIMIT ?",
+            "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at, l.signature, l.nonce FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? ORDER BY l.rowid DESC LIMIT ?",
             [name, limit])
     } else {
         r = perform db.query(db,
-            "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? AND l.rowid > (SELECT rowid FROM letters WHERE id = ?) ORDER BY l.rowid DESC LIMIT ?",
+            "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at, l.signature, l.nonce FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? AND l.rowid > (SELECT rowid FROM letters WHERE id = ?) ORDER BY l.rowid DESC LIMIT ?",
             [name, since_id, limit])
     }
     if is_error(r) { return [] }
@@ -446,11 +471,11 @@ fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
     r = None
     if since_id == "" {
         r = perform db.query(db,
-            "SELECT id, from_name, from_address, content, created_at FROM letters ORDER BY rowid DESC LIMIT ?",
+            "SELECT id, from_name, from_address, content, created_at, signature, nonce FROM letters ORDER BY rowid DESC LIMIT ?",
             [limit])
     } else {
         r = perform db.query(db,
-            "SELECT id, from_name, from_address, content, created_at FROM letters WHERE rowid > (SELECT rowid FROM letters WHERE id = ?) ORDER BY rowid DESC LIMIT ?",
+            "SELECT id, from_name, from_address, content, created_at, signature, nonce FROM letters WHERE rowid > (SELECT rowid FROM letters WHERE id = ?) ORDER BY rowid DESC LIMIT ?",
             [since_id, limit])
     }
     if is_error(r) { return [] }
@@ -764,7 +789,7 @@ fn handle_discord(req: Any) -> [Any] {
         db_insert_letter(msg_id,
             to_text(get(from_obj, "name")),
             to_text(get(from_obj, "address")),
-            content, created_at)
+            content, created_at, None, None)
         for r in recipients {
             db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
         }
@@ -1048,19 +1073,19 @@ fn handle_post_message(req: Any) -> [Any] {
             make_record([["name", canon], ["address", addr]]))
     }
 
-    // INSERT only — code path has no UPDATE / no DELETE.
-    db_insert_letter(msg_id, from_name, from_address, content, created_at)
-    for r in resolved_recipients {
-        db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
-    }
-
-    // §6.5 envelope 보존 — signature/nonce/created_at 그대로 forward.
-    // verify_required 흐름이 아니어도 client가 signature 보냈으면 echo (Phase 0/1
-    // optional 흐름 호환).
+    // §6.5 envelope 보존 — signature/nonce/created_at 그대로 forward + DB 보관.
+    // verify_required 흐름이 아니어도 client가 signature 보냈으면 echo+저장 (Phase 0/1
+    // optional 흐름 호환). DB 컬럼 추가는 PRINCIPLES §3 양립 (row 변경 아님).
     sig_echo = None
     nonce_echo = None
     if has_sig_claim { sig_echo = to_text(sig_v) }
     if nonce_v != None and to_text(nonce_v) != "" { nonce_echo = to_text(nonce_v) }
+
+    // INSERT only — code path has no UPDATE / no DELETE.
+    db_insert_letter(msg_id, from_name, from_address, content, created_at, sig_echo, nonce_echo)
+    for r in resolved_recipients {
+        db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
+    }
 
     envelope = make_record([
         ["id", msg_id],
