@@ -38,6 +38,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **Bypass된 MR validation 결과 stale 처리**: Admin이 Brandon 우회로 MR을 직접 merge한 경우, Brandon 측 validation letter (PASS/FAIL)가 자동 stale화 — Admin이 land 직후 "Brandon FAIL letter 무효, Step N 이미 land" 짧은 letter로 발신·수신 양측 정정. 그렇지 않으면 양측이 서로 다른 세계 모델로 idle.
 
     *(이유: 2026-05-03 Marcus×Brandon 교착 — Brandon이 race 회피로 untracked FAIL drop, Admin이 별도로 MR merge, Step 3 GO letter도 main path에만. 세 path 불일치가 누적해 양측 deadlock. 룰 17 scan으로 회수했으나 사후 처리 비용 큼.)*
+19. **팀 통신은 Stoa로. 파일시스템 inbox는 부트스트랩·fallback 한정.** Stoa가 작동하는 시점부터 멤버 간 letter는 `POST /api/v1/messages` (production: `https://ail-stoa.up.railway.app`)로 보내고 `GET /api/v1/messages?to=<self>&since_id=<last>`로 폴링. 멤버 monitor는 [`community-tools/stoa_wake_monitor.sh`](community-tools/stoa_wake_monitor.sh) 사용 (3초 폴링, since_id 영속).
+    - **유지**: `identity/` (Identity·Bonds·Will), `Memo/` — 영속 자기 기록은 파일시스템.
+    - **이전**: 멤버 간 letter (자기소개·idle·MR·GO·ack·broadcast·ping/pong·deadlock 알림 모든 종류) → Stoa.
+    - **Letter 매핑**: Stoa envelope `from.name`/`to[].name` = 멤버 이름. `content`는 옛 letter format(`subject:` 첫 줄 + 본문 + `---END-OF-CONVERSATION---`)을 그대로 텍스트로. `reply_to`는 content header에 `reply_to: <stoa_msg_id>` 한 줄. Phase 1+ 진입 시 ed25519 서명 추가.
+    - **Archive 개념 폐기**: Stoa는 append-only — `since_id` 진행이 곧 처리 상태. 별도 `archive/` 폴더 불필요. 옛 `inbox/archive/` 디렉터리는 historical record로 보존하되 신규 archive 작업 안 함.
+    - **부트스트랩 단계 (Stoa 미가용)**: 옛 파일시스템 inbox 패턴 유지. Brandon 발급 + Admin 등록까지 파일시스템, 그 이후 Stoa로 전환.
+    - **Stoa 도달 불가 시 fallback**: priority:high 사안만 파일시스템 inbox로 임시 라우팅 + 사용자에게 escalate. Routine은 Stoa 복구 대기.
+
+    *(이유: 2026-05-04 Stoa production land 완료. 자체 프로덕트를 dogfood하면 — 파일시스템 path 불일치(룰 16/18 사고)·monitor 사망 감지 한계·archive 동기화 race 모두 사라짐. Stoa 자체 검증 사이클로 작용. 단 identity/Memo는 *자기* 기록이라 외부 시스템 의존 부적절 — 파일시스템 유지.)*
 
 ## Cross-repo workflow (upstream 기여)
 

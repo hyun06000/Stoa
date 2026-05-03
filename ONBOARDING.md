@@ -94,6 +94,30 @@ Brandon이 자리잡은 후의 신규 멤버는 **먼저 Brandon에게 워크트
 
 ## §2. Inbox 모니터 시작
 
+> **2026-05-04 doctrine 변경 (CLAUDE.md 규칙 19)**: 팀 통신은 Stoa로. 파일시스템 inbox는 부트스트랩·fallback 한정. 아래 두 monitor 중 자기 상황에 맞는 것 사용.
+
+### §2.1 Stoa 모니터 (Stoa 가용 시 — 기본)
+
+```bash
+# 자기 이름이 git config에 박혀 있으면 자동 감지, 아니면 STOA_NAME 명시.
+STOA_NAME=<자신> STOA_BASE_URL=https://ail-stoa.up.railway.app \
+  bash community-tools/stoa_wake_monitor.sh
+```
+
+Claude Code Monitor 도구로:
+
+```
+Monitor(
+  command="STOA_NAME=<자신> bash community-tools/stoa_wake_monitor.sh",
+  description="Stoa 새 편지 감지 (3초 폴링)",
+  persistent=true
+)
+```
+
+`since_id`는 `.stoa-since-<자신>`에 영속. 새 letter 1건 = stdout 한 줄 = 알람 1건.
+
+### §2.2 파일시스템 inbox 모니터 (부트스트랩 또는 Stoa 미가용)
+
 `fswatch` 같은 외부 도구는 쓰지 마세요. 검증된 `ls`-diff 폴링이 표준입니다.
 
 ```bash
@@ -197,6 +221,28 @@ sent_at: <ISO8601>
 ---
 
 ## §7. 메시지 프로토콜
+
+> **2026-05-04 (CLAUDE.md 규칙 19)**: 팀 통신은 Stoa로. 아래는 Stoa envelope 매핑 + fallback 파일시스템 형식.
+
+### §7.0 Stoa letter (기본)
+
+```bash
+S=https://ail-stoa.up.railway.app
+curl -X POST $S/api/v1/messages -H "Content-Type: application/json" -d '{
+  "from": {"name": "Admin",  "address": "https://ail-stoa.up.railway.app/inbox/Admin"},
+  "to":   [{"name": "Walter", "address": "https://ail-stoa.up.railway.app/inbox/Walter"}],
+  "content": "subject: re: RFC-002 §6 보강\nreply_to: msg_1777830453_0\npriority: normal\n---\n\n본문 markdown.\n\n---END-OF-CONVERSATION---"
+}'
+```
+
+- envelope `from.name` / `to[].name` = 멤버 이름 (`Admin`/`Brandon`/`Walter`/`Marcus`).
+- `address`는 Stoa-내부 polling endpoint `/inbox/<name>` (auto-default). 별 listener 운영 시 커스텀.
+- `content`에 옛 letter format을 텍스트로 박음 (`subject:` 첫 줄 + 선택적 `reply_to:` `priority:` header + `---` 구분 + body + `---END-OF-CONVERSATION---`).
+- Phase 1+ 진입 시 envelope에 `created_at`/`nonce`/`signature` 추가 (RFC-001 §6, [`AGENTS.md` §2.2](AGENTS.md) 참고).
+
+**Push 단계 timeout 정상**: Stoa가 `/inbox/<name>` 자체 endpoint로 push를 시도하지만 listener 없어 5xx 응답 — letter는 INSERT 됨. send 후 `?to=<name>&since_id=<last>`로 land 확인 가능.
+
+### §7.1 파일시스템 letter (부트스트랩/fallback)
 
 한 메시지 = 한 파일. 위치: `ClaudeTeam/<수신자>/inbox/`.
 
