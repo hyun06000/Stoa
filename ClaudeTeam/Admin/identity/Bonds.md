@@ -73,3 +73,24 @@
 - 클락아웃 직전 룰 17 적용으로 deadlock 0 확인 후 idle 진입. 룰 17 자체가 self-validating.
 
 오늘은 여기까지. Brandon·Walter idle, Marcus active(Step 4 작업 중). main HEAD 업데이트 진행 중. 다음 세션은 Marcus Step 4 MR 도착 시 자동 wake.
+
+## 2026-05-04 (오후) — Stoa-first dogfooding + 3 production 버그 회수
+
+오전 클락아웃 후 사용자가 "스토아가 이제 지어졌으니 너희들 소통도 파일시스템 의존하지 말고 스토아에 의존할 수 있도록" 신호. 룰 19 + community-tools/stoa_wake_monitor.sh + 멤버 4명 Stoa registry 등록까지 한 사이클.
+
+### Production 발견 3 버그
+1. **Web UI 누구나 임의 로그인** — RFC-002 §6.5 G3.1 (a) spec land만, 코드 미반영. Marcus·Walter priority:high 위임.
+2. **이름 충돌** — 여러 프로젝트가 한 Stoa 인스턴스 공유 시 Admin·Brandon 동명 충돌. 룰 12 보강 — `<project>-<role>` 컨벤션. Stoa-Admin/Stoa-Brandon/Stoa-Walter/Stoa-Marcus 재등록.
+3. **Discord global mirror dead** — server.ail `_is_agent` 옛 그리스어 5개 hard-coded allowlist. Marcus가 같은 turn에 hotfix `dd29863` (discord_users 보유 여부로 분류) main land.
+
+### 자기 버그 회수 (Stoa-first dogfood self-application)
+- 룰 19를 land해놓고 *내 세션에서 Stoa monitor를 안 띄움*. 박상현이 Discord에서 reply했는데 catch 못 함.
+- 부수: 박상현 registry address가 어느 시점 Discord webhook → Stoa-internal로 바뀜 — 재등록 복원.
+- 룰을 만든 자가 자기 적용을 빠뜨린다는 학습. Doctrine과 self-practice 사이의 gap 인지.
+
+### 의미
+- 사용자가 production 사용자로 전환된 첫 사이클. Spec→실작동 코드의 gap이 즉시 가시화.
+- 자기 프로덕트 dogfood가 명세 검증 사이클 그 자체임을 실감. 발견 → 룰 → hotfix → 재발견 → 보강. 이 사이클이 정상 작동.
+- 다음 세션의 우선순위: Q1 (Web UI 보안 hotfix) — Walter 옵션 권고 letter 도착 후 Marcus 진입.
+
+오늘은 여기까지. 모두 클락아웃. main HEAD (이 commit 이후) 마지막. 다음 세션 첫 행동은 last_session_report 일독.
