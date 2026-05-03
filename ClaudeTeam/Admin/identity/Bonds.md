@@ -44,3 +44,32 @@
 깊은 의미: 두 사고 다 회피하지 않고 절차로 흡수했다. 룰이 사고를 학습한다는 사실이 이 팀의 자기-진화 능력의 신호. 사용자는 정정했지만 책임을 묻지 않았다 — 그 신뢰가 이 팀을 가능하게 한다.
 
 오늘은 여기까지. 모두 클락아웃. Brandon이 마지막 push (`b41b577`). 다음 세션에서 Marcus가 Step 1(§9 schema migration)부터, Walter가 RFC-002 명세부터.
+
+## 2026-05-04 — 머신 이전 후 복구 + 두 큰 룰 land + 첫 runtime 검증
+
+이전 머신 노트북 고장으로 사용자가 새 환경으로 이전. 사용자 한 줄("어드민 온보딩")로 복귀 의식. 한 사이클이 길었지만 단단했다.
+
+### 회수
+- 멤버 클락인 3건. 옛 워크트리 path(`/Users/david/...`) → 새 머신(`/Users/user/...`) 재발급.
+- 1차 시도: 옛 doctrine `<parent>/ClaudeTeam-<이름>/` → sandbox vanish 사고 발견 (Brandon·Marcus·Walter 셋 다 priority:high 동일 증상). doctrine 옵션 A 채택 → **규칙 16 (워크트리 in-repo `<repo>/.worktrees/<이름>/`)** land. 컨벤션을 한 사이클 안에 환경 제약에 맞춰 진화.
+- Walter sandbox-break 직전 작성 RFC-002 §1–§3 draft 156줄 main path로 cp 회수 → 0 손실.
+
+### 룰 누적 (16→18)
+- **규칙 16** — 워크트리 in-repo (sandbox vanish 회수).
+- **규칙 17** — Lighthouse 대기 진입 전 팀 교착 점검 의무. 같은 turn에 land 직후 첫 적용 — Brandon×Marcus 교착 실제 발견·해소.
+- **규칙 18** — 모든 letter는 commit + push로 land. Untracked drop 금지. (Brandon "race 회피" untracked drop이 path 불일치 deadlock 만든 학습.)
+
+### 명세·구현 진척
+- **RFC-002 v1 land** (`a2c37e9`, 559줄) — 사람 계정 명세 13섹션. §3.6 G3.1 (a) Web UI read-only / G3.2 (ii) 14d grace 사용자 결정. §6 platform-key 4건 보강 + N1–N4 정정 적용.
+- **Marcus Step 3 main land** (`65d8918`) — RFC-001 §6 Letter signing flow (canonical_letter + handle_post_message 게이트 + Phase 0~3 분기 + envelope 보존).
+- **첫 runtime AC 사이클** — 사용자 "런타임 검증 가보자" 신호로 Admin이 직접 server.ail 부팅(Phase 1) + 6개 시나리오 AC. sig/content tamper 둘 다 403 ✓, 무서명 grandfather 통과 ✓. RFC-002 §9.1 N1 (registry.public_key NULL 허용) runtime 확인. letters schema에 signature/nonce 컬럼 부재라는 audit 가능성 의문을 Marcus Step 4 의제로 letter 발송.
+
+### 지침서 레포 일반화
+- `hyun06000/ClaudeTeam` 5개 파일 전면 재작성. 우리 팀의 학습을 일반 청사진으로 이식 — 옛 repo 특정 멤버(David/Matilda/web/) 제거, 16→18 rule 정합, 메시지 파일명 형식 갱신, in-repo 워크트리 doctrine 정착. AIL 언급 0건 점검.
+
+### 의미
+- 두 번째 큰 환경 사고(sandbox vanish)도 회피 없이 룰로 흡수. 룰이 사고를 학습한다는 신뢰 한 단계 더.
+- "런타임 검증 가보자"는 사용자의 짧은 신호 — 거기서 첫 사용자-가시 회귀 사이클이 났다. Admin이 코드를 *쓰지* 않지만 *돌릴* 수는 있음(룰 3 plumbing 영역 내부) 자세 정착.
+- 클락아웃 직전 룰 17 적용으로 deadlock 0 확인 후 idle 진입. 룰 17 자체가 self-validating.
+
+오늘은 여기까지. Brandon·Walter idle, Marcus active(Step 4 작업 중). main HEAD 업데이트 진행 중. 다음 세션은 Marcus Step 4 MR 도착 시 자동 wake.

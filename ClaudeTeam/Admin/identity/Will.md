@@ -9,7 +9,7 @@
 4. `inbox/`에 미처리 메시지가 있는지 확인해라.
 5. inbox 모니터를 띄워라 (ONBOARDING §2).
 
-## 정해진 것 (부트스트랩 + 2026-05-01 진화 세션 누적)
+## 정해진 것 (부트스트랩 + 2026-05-01·2026-05-04 누적)
 
 ### 자기 자신
 - 내 이름은 **Admin**.
@@ -40,13 +40,14 @@
   - 사용자 결정 reversal.
   - 신규 멤버 영입 (사용자 spawn 필요).
 
-### Git
+### Git (2026-05-04 재배치 후)
 - 보호: `enforce_admins=false`, force-push·삭제·non-linear 차단.
-- 멤버 워크트리: `<parent>/ClaudeTeam-<이름>/`, 브랜치 `member/<이름>`.
-- **모든 git push는 Brandon 소관** (사용자 정정 `b28a309`). 멤버는 로컬 commit까지만. Lighthouse는 컨벤션·문서 한정 직접 push 예외.
-- **규칙 11 (좁혀짐)**: `member/Brandon` `--force-with-lease`만 사전 포괄 승인. 다른 멤버 브랜치는 매번 사용자 명시 GO 필요.
-- **Rebase-first commit**: 자기 부수 커밋 전에 `fetch + rebase`로 main 따라잡기 (ONBOARDING §0.5).
-- harness 게이트는 사용자 직접 타이핑만 인식 (Admin 위임 라우팅으로 안 풀림). force-push GO 필요할 때마다 사용자 직접 한 줄, 또는 `.claude/settings.json`에 영구 패턴.
+- **멤버 워크트리: `<repo>/.worktrees/<이름>/`** (규칙 16, 2026-05-04 sandbox vanish 사고 후 in-repo로 이동). `.gitignore`에 `.worktrees/` 등재.
+- **GitHub remote = Admin, 로컬 git = Brandon** (규칙 10, 2026-05-01 재배치). Brandon은 워크트리 발급·MR 검증·`gh` CLI까지. **`git push origin ...`은 Admin이 실행** (사용자 turn 안에서 작동, harness gate 정합).
+- 사용자 standing GO: **2026-05-04 "앞으로의 깃 푸시 모두 승인"** — routine push 매번 컨펌 불필요. Destructive(force-push to main 등)는 여전히 case-by-case 사용자 GO.
+- 예외: Brandon 자기 브랜치 `member/Brandon` `--force-with-lease`만 settings.local.json 등록 자동.
+- **Rebase-first commit**: 자기 부수 커밋 전에 `fetch + rebase`로 main 따라잡기 (ONBOARDING §0.5 #5).
+- **letter는 commit + push로 land** (규칙 18). Untracked drop 금지 — path 불일치 deadlock 만든다.
 
 ### 기술 스택 / 외부
 - **규칙 10**: 모든 코드는 AIL. 다른 언어 갈아끼우지 않는다. Reference card: `https://github.com/hyun06000/AIL/blob/main/reference-impl/ail/reference_card.md`.
@@ -66,14 +67,15 @@
 ## 아직 열려 있는 것 (다음 세션 우선순위 순)
 
 ### 사용자 큐 (사용자 액션 도착 시 처리)
-- **force-push GO** (Walter origin 정렬): `origin/member/Walter`가 stale `8f532c0`에 있고 main `b41b577`까지 갔음. 사용자 1회 GO 또는 `.claude/settings.json`에 `Bash(git push --force-with-lease origin member/*:*)` 영구. 도착 시 Brandon에게 라우팅 → Brandon이 force-with-lease 1회.
-- **PyPI v1.71.0 yank**: AIL `ail-interpreter==1.71.0` 빈 release. 사용자만 가능 (`hyun06000` PyPI 권한). 우리 작업엔 영향 없음 (1.71.1 사용).
+- **PyPI v1.71.0 yank**: AIL `ail-interpreter==1.71.0` 빈 release. 사용자만 가능 (`hyun06000` PyPI 권한). 우리 작업 미차단.
+
+(force-push GO 큐는 2026-05-04 사용자 standing "앞으로의 깃 푸시 모두 승인"으로 close. AIL 환경 업그레이드도 이날 처리.)
 
 ### 다음 세션 작업
-- **Marcus**: server.ail에 RFC-001 v1.2 implementation 시작. Will.md에 Step 1~6 가이드 박힘. Step 1 = §9 schema migration.
-- **Walter**: RFC-002 (인간 계정) 명세 작성 시작. Will.md에 13섹션 구조 + 사전 학습 가이드 박힘. RFC-001 spec letter 패턴 재사용.
-- **Brandon**: 두 멤버 MR 큐 처리 + monitor 두 개 점검 (`b3lpn4q14` inbox, `b1ydljpxt` AIL #3 — Sphinx 후속 변경 모니터링).
-- **Admin**: 모니터 + 두 멤버 mid-review·user-gate 라우팅. 영입 신호 시 `say here` 또는 `say ya`.
+- **Marcus**: Step 4 (§7 Replay defense — `seen_nonces` INSERT 게이트 + `created_at` ±5분 window) + AC-1~12 sh+curl runtime 묶음 active. RFC-002 §6 platform key 구현은 Step 4 후. Step 3 main land(`65d8918`).
+- **Walter**: RFC-002 v1 main land(`a2c37e9`) 후 idle 클락아웃. 다음 RFC 또는 §6 구현 보조 대기.
+- **Brandon**: 사이클 3 sub-1 클락아웃 유지. Marcus Step 4 MR 도착 시 자동 wake.
+- **Admin**: 모니터 + Marcus 라우팅 + Brandon handoff 시 push. 룰 17 deadlock scan 매 idle 진입 전.
 
 ### 후속 영입 후보
 - **Rachel** (QA/CI) — Marcus implementation이 한 두 번 돌고 회귀 가드 필요해질 시점에 영입 신호.
