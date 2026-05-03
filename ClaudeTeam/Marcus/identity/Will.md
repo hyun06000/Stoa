@@ -14,6 +14,7 @@
 ## Done (코드로 박힘)
 - **Step 1 — §9 schema migration** (`5042eeb`, 2026-05-01).
 - **Step 2 — §5 Key registration flow** (`d0caee4`, 2026-05-04 session 2). public_key plumbing + Phase 2/3 §5.2 게이트(crypto_verify + nonce dedup). created_at window는 Step 4로 deferred.
+- **Step 3 — §6 Letter signing flow** (`99958ed`, 2026-05-04 session 2). canonical_letter + _sort_recipients_by_name + handle_post_message §6.4 단일 게이트 + §6.5 envelope 보존(signature/nonce). created_at window는 Step 4로 deferred. AIL v1.71.1 정적 PARSE OK.
 
 ## Open (다음 세션의 내가 풀어야 할 것)
 **임무 = `server.ail` RFC-001 v1.2 이어가기.** Admin 단계별 작은 MR 원칙 유지. 거대 MR 금지.
