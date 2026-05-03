@@ -159,6 +159,141 @@ fn canonical_letter(from_name: Text, from_address: Text, recipients: [Any], cont
     ], "")
 }
 
+// _get_window_seconds: STOA_CREATED_AT_WINDOW_SECONDS env (RFC §7.1). 기본 60.
+// 잘못된 값은 60으로 fallback (실패 fail-loud 대신 안전한 기본 우선 — 운영자 mistype 시
+// 서명 흐름 전체가 401/500으로 죽지 않게).
+fn _get_window_seconds() -> Number {
+    r = perform env.read("STOA_CREATED_AT_WINDOW_SECONDS")
+    if is_error(r) { return 60 }
+    v = trim(unwrap(r))
+    if v == "" { return 60 }
+    n = to_number(v)
+    if is_error(n) { return 60 }
+    val = unwrap(n)
+    if val <= 0 { return 60 }
+    return val
+}
+
+// _get_test_time: STOA_TEST_TIME env (있으면 unix sec 정수). RFC-002 §12.2 패턴 — AC sh+curl
+// 시나리오에서 `now`를 결정적으로 mock. 미설정 시 None.
+fn _get_test_time() -> Any {
+    r = perform env.read("STOA_TEST_TIME")
+    if is_error(r) { return None }
+    v = trim(unwrap(r))
+    if v == "" { return None }
+    n = to_number(v)
+    if is_error(n) { return None }
+    return unwrap(n)
+}
+
+fn _is_leap_year(y: Number) -> Boolean {
+    if y % 400 == 0 { return true }
+    if y % 100 == 0 { return false }
+    if y % 4 == 0 { return true }
+    return false
+}
+
+fn _days_in_month(y: Number, m: Number) -> Number {
+    if m == 1 { return 31 }
+    if m == 2 {
+        if _is_leap_year(y) { return 29 }
+        return 28
+    }
+    if m == 3 { return 31 }
+    if m == 4 { return 30 }
+    if m == 5 { return 31 }
+    if m == 6 { return 30 }
+    if m == 7 { return 31 }
+    if m == 8 { return 31 }
+    if m == 9 { return 30 }
+    if m == 10 { return 31 }
+    if m == 11 { return 30 }
+    return 31
+}
+
+// _iso_to_unix: ISO8601 UTC `YYYY-MM-DDTHH:MM:SS[.fff]Z` → unix seconds.
+// 분초 분수는 무시(seconds 정수만). 비-Z timezone은 거부 (Stoa는 Z만 허용 권고).
+// ok(Number) 또는 error(Text).
+fn _iso_to_unix(iso: Text) -> Any {
+    if length(iso) < 19 { return error("iso too short") }
+    if slice(iso, 4, 5) != "-" { return error("iso bad sep") }
+    if slice(iso, 7, 8) != "-" { return error("iso bad sep") }
+    if slice(iso, 10, 11) != "T" { return error("iso bad sep") }
+    if slice(iso, 13, 14) != ":" { return error("iso bad sep") }
+    if slice(iso, 16, 17) != ":" { return error("iso bad sep") }
+    yr = to_number(slice(iso, 0, 4))
+    if is_error(yr) { return error("bad year") }
+    mo = to_number(slice(iso, 5, 7))
+    if is_error(mo) { return error("bad month") }
+    dy = to_number(slice(iso, 8, 10))
+    if is_error(dy) { return error("bad day") }
+    hr = to_number(slice(iso, 11, 13))
+    if is_error(hr) { return error("bad hour") }
+    mi = to_number(slice(iso, 14, 16))
+    if is_error(mi) { return error("bad minute") }
+    sc = to_number(slice(iso, 17, 19))
+    if is_error(sc) { return error("bad second") }
+    y = unwrap(yr)
+    m = unwrap(mo)
+    d = unwrap(dy)
+    h = unwrap(hr)
+    mn = unwrap(mi)
+    s = unwrap(sc)
+    if y < 1970 { return error("year < 1970 unsupported") }
+    if m < 1 or m > 12 { return error("month out of range") }
+    if d < 1 or d > _days_in_month(y, m) { return error("day out of range") }
+    if h < 0 or h > 23 { return error("hour out of range") }
+    if mn < 0 or mn > 59 { return error("minute out of range") }
+    if s < 0 or s > 60 { return error("second out of range") }
+    days = 0
+    for yy in range(1970, y) {
+        days = days + 365
+        if _is_leap_year(yy) { days = days + 1 }
+    }
+    for mm in range(1, m) {
+        days = days + _days_in_month(y, mm)
+    }
+    days = days + d - 1
+    return ok(days * 86400 + h * 3600 + mn * 60 + s)
+}
+
+// _server_now_unix: clock.now("unix") 또는 STOA_TEST_TIME mock. 검증 흐름에서 비교 기준.
+fn _server_now_unix() -> Any {
+    tt = _get_test_time()
+    if tt != None { return ok(tt) }
+    r = perform clock.now("unix")
+    if is_error(r) { return error("clock.now failed") }
+    n = to_number(unwrap(r))
+    if is_error(n) { return error("clock.now non-numeric") }
+    return ok(unwrap(n))
+}
+
+// _within_window: client ISO와 서버 현재 시각의 절대 차가 window_secs 이내인지.
+// RFC §7.1. 잘못된 ISO는 false (검증 실패 = 거절).
+fn _within_window(client_iso: Text, window_secs: Number) -> Boolean {
+    cu = _iso_to_unix(client_iso)
+    if is_error(cu) { return false }
+    su = _server_now_unix()
+    if is_error(su) { return false }
+    delta = unwrap(cu) - unwrap(su)
+    if delta < 0 { delta = -delta }
+    return delta <= window_secs
+}
+
+// _nonce_format_ok: `[0-9a-f]{32,}` — RFC §7.2 lower-case hex 16+ bytes (32+ chars).
+// AIL stdlib regex 부재 → 직접 검사.
+fn _nonce_format_ok(nonce: Text) -> Boolean {
+    n = length(nonce)
+    if n < 32 { return false }
+    for i in range(0, n) {
+        c = slice(nonce, i, i + 1)
+        is_digit = c >= "0" and c <= "9"
+        is_hex_lc = c >= "a" and c <= "f"
+        if not (is_digit or is_hex_lc) { return false }
+    }
+    return true
+}
+
 // _get_signing_phase: STOA_SIGNING_PHASE env. 미설정/오설정은 0. (RFC §8, §10.5.)
 fn _get_signing_phase() -> Number {
     r = perform env.read("STOA_SIGNING_PHASE")
@@ -863,11 +998,16 @@ fn handle_post_message(req: Any) -> [Any] {
                 ["address", get(r, "address")]
             ]))
         }
+        if not _nonce_format_ok(nonce) {
+            return err_json(400, "nonce format invalid (lower-case hex, 32+ chars)")
+        }
+        if not _within_window(client_created_at, _get_window_seconds()) {
+            return err_json(403, "created_at out of window")
+        }
         canon = canonical_letter(from_name, from_address, raw_recipients, content, client_created_at, nonce)
         if not crypto_verify_ed25519(sender_pk, signature, canon) {
             return err_json(403, "signature verification failed")
         }
-        // TODO Step 4(§7.1): created_at window 검증.
         rec = db_record_seen_nonce(from_name, nonce, now_iso())
         if is_error(rec) {
             return err_json(403, "nonce already used")
@@ -1008,11 +1148,16 @@ fn _register_gate(name: Text, address: Text, body: Any) -> Any {
         if signature == "" or nonce == "" or created_at == "" {
             return make_record([["ok", false], ["code", 400], ["msg", "signature/nonce/created_at must be non-empty"]])
         }
+        if not _nonce_format_ok(nonce) {
+            return make_record([["ok", false], ["code", 400], ["msg", "nonce format invalid (lower-case hex, 32+ chars)"]])
+        }
+        if not _within_window(created_at, _get_window_seconds()) {
+            return make_record([["ok", false], ["code", 403], ["msg", "created_at out of window"]])
+        }
         canon = canonical_register(name, address, pk_text, created_at, nonce)
         if not crypto_verify_ed25519(prev_pk, signature, canon) {
             return make_record([["ok", false], ["code", 403], ["msg", "signature verification failed"]])
         }
-        // TODO Step 4(§7.1): created_at window 검증. 현재는 시간 검증 생략.
         rec = db_record_seen_nonce(name, nonce, now_iso())
         if is_error(rec) {
             return make_record([["ok", false], ["code", 403], ["msg", "nonce already used"]])
