@@ -23,6 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - inbox 3장 이상 즉답 안 되고 컨텍스트 부하감.
     - 연속 N turn 사용자 직접 응답 욕구 발생 (본능 가드 규칙 13 참조).
     세션 피로 임계점에서 능동 클락아웃이 룰 위반보다 안전하다.
+16. **워크트리는 repo 내부 `Stoa/Stoa/.worktrees/<이름>/` (2026-05-03).** 하니스 sandbox가 프로젝트 루트 외부 dir을 turn 사이에 휘발시킨다 — 옛 `<parent>/ClaudeTeam-<이름>/` doctrine 폐기. `.worktrees/`는 `.gitignore` 등재(공유 자산 아님, 각 머신 로컬). Brandon은 이 path로 발급, 멤버는 이 path 안에서 monitor·commit.
 
 ## Cross-repo workflow (upstream 기여)
 

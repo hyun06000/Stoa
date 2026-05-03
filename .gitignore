@@ -12,3 +12,6 @@ mailbox/
 .DS_Store
 .vscode/
 .idea/
+
+# Member worktrees (in-repo, sandbox doctrine 2026-05-03 — see ONBOARDING §0.5)
+.worktrees/
