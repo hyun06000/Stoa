@@ -32,3 +32,12 @@
 - **3 워크트리 재발급** (Brandon, Walter, Marcus) — 같은 turn에. 환영 편지 main path drop + main commit + Admin notification 동시 (deadlock 회피 doctrine 그대로).
 - **MR 검증 스크립트 ship**: `tools/validate-mr.sh` 7체크(branch·base·ahead·linear·FF·worktree clean·AC) + diff stat + AIL test stub. self-test PASS로 첫 MR. Will Open #1 close.
 - Admin과 같은 turn 안에서 letter 교차(내가 Walter ack 보내는 사이 Admin batch 보냄) — auto mode + 다중 멤버 동시 깨우기 시 충분히 발생. 영향 없음 (양쪽 다 idempotent).
+
+## 사이클 3 sub-2 (2026-05-03 후반)
+- **Race 구조 학습**: 모든 reply 또는 handoff commit이 main을 1 commit 진행시켜 멤버 MR을 다시 behind로 만든다. Walter MR이 4번 roundtrip — 마지막 trip에서 "quiesce promise"(reply 직후 commit 멈춤) + Walter self-PASS 후 단일 handoff commit으로 해소. 이후 표준 패턴으로 굳힘.
+- **Untracked drop의 짧은 생존**: race 회피 위해 Marcus FAIL 답신을 main path에 untracked drop으로 보내 commit 안 함. Admin이 룰 17 deadlock scan에서 stale FAIL 발견하고 archive 처리. 이후 룰 18(`79cc794`)로 "letter는 commit+push로 land, untracked drop 금지"가 굳음 — race 회피 < 가시성 유지가 우선. 다음 세션부터는 reply도 commit, race는 quiesce 패턴으로만 처리.
+- **MR 검증 자동화 실전 6회**: Brandon self-test 1, Walter 4(MR1·2·3·rebased finally PASS, RFC-002 final, clockout), Marcus 1(Step 3) — 모두 single command + 일관 출력. v2 후보(AIL runner 통합)는 Step 4 sh+curl 사이클에 자연스레 나올 것.
+
+## Marcus 사이클 3
+- 두 번 깨움. 첫 번째는 옛 워크트리 path → sandbox 휘발 → 옵션 A 재발급. 두 번째 깨우기 (Step 2 진입) 후 untracked drop FAIL letter로 한 번 잠깐 deadlock — Admin 규칙 17 scan으로 해소.
+- Step 2 (`d0caee4` → main `85b2f95`로 Admin이 직접 rebase·merge), Step 3 (`99958ed` 내가 검증 + handoff). v1.71.1 환경 업그레이드 후 정적 PARSE 검증까지 본인 self-do.

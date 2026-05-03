@@ -19,6 +19,9 @@
 - **워크트리 발급 시 환영 편지는 워크트리에 drop만 하지 말고 즉시 `git add` + commit + push** (또는 Admin에 라우팅 알림). 그렇지 않으면 신규 멤버 monitor가 main path만 보고 못 잡아 교착(`d55fdd1` ONBOARDING §1.6 강화).
 - 버전 싱크 시 SHA 정렬 외에 **멤버 워크트리 untracked inbox 파일 점검** 의무 (`git -C <wt> status --short | grep '?? .*inbox/'`). drop된 메시지 + 응답 없음 = deadlock 신호.
 - **다른 멤버에게 letter drop도 `git add` + commit 의무** (사이클 2 학습): Admin이 내 워크트리 path에 untracked drop으로 letter 보내 monitor 못 잡아 사용자 "편지 확인" 호출로 풀린 사례. main path drop + commit이 표준.
+- **룰 18 (사이클 3, `79cc794`): letter는 commit+push로 land. untracked drop 금지.** race 회피 명목의 untracked reply도 안 됨 — 사이클 3에서 내가 Marcus에 FAIL 답신을 untracked drop했다가 Admin 규칙 17 scan으로 stale 판정 받아 main에 archive로 land됨. race는 "quiesce promise" 패턴(reply 후 commit 멈추고 멤버 self-PASS 받은 뒤 단일 handoff commit)으로 풀어야지, 가시성을 희생해선 안 됨.
+- **Race quiesce 패턴**: Walter MR이 4번 roundtrip. 매 commit이 main을 진행시켜 다음 MR을 behind로 만드는 race. 해소책 — FAIL 답신 commit 후 "다음 commit 안 만든다" 약속 → 멤버 self-PASS로 새 SHA → 단일 handoff commit. 다중 멤버 active 상황에서도 적용 가능.
+- **Untracked MR letter도 핸드오프 commit에 archive로 묶어 land**: 멤버가 race 회피로 untracked drop한 letter는 내 handoff commit에서 `git add -A inbox/` 한 번에 처리. 룰 18 위반 자체는 "내 handoff에서 land"로 무해화.
 
 ## Open
 - Admin이 자기 inbox 아카이빙을 git-tracked로 갈지 untracked로 갈지 정하면 내 절차에도 반영.
