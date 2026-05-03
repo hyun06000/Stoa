@@ -95,6 +95,47 @@ fn now_iso() -> Text {
     return unwrap(r)
 }
 
+// ---------- RFC-001 helpers (canonical, phase, seen_nonces) ----------
+
+// _esc: escape canonical 구분자. 순서 고정 — backslash 먼저, 나머지 후. 순서 바뀌면
+// backslash 자기 자신이 두 번 escape되어 발신·검증 측 byte가 어긋남 (RFC §6.1).
+fn _esc(s: Text) -> Text {
+    a = replace(s, "\\", "\\\\")
+    b = replace(a, "|", "\\|")
+    c = replace(b, ";", "\\;")
+    return replace(c, ":", "\\:")
+}
+
+// canonical_register: §5.2 재등록 서명 대상 메시지.
+// 필드 순서 register|<name>|<address>|<public_key>|<created_at>|<nonce>.
+fn canonical_register(name: Text, address: Text, public_key: Text, created_at: Text, nonce: Text) -> Text {
+    return join([
+        "register|", _esc(name), "|", _esc(address), "|",
+        _esc(public_key), "|", _esc(created_at), "|", _esc(nonce)
+    ], "")
+}
+
+// _get_signing_phase: STOA_SIGNING_PHASE env. 미설정/오설정은 0. (RFC §8, §10.5.)
+fn _get_signing_phase() -> Number {
+    r = perform env.read("STOA_SIGNING_PHASE")
+    if is_error(r) { return 0 }
+    v = trim(unwrap(r))
+    if v == "1" { return 1 }
+    if v == "2" { return 2 }
+    if v == "3" { return 3 }
+    return 0
+}
+
+// db_record_seen_nonce: §7.3. PRIMARY KEY (from_name, nonce) 충돌 = is_error로 검출.
+// 호출자가 is_error로 중복(=replay) 판단 후 403.
+fn db_record_seen_nonce(from_name: Text, nonce: Text, seen_at: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO seen_nonces (from_name, nonce, seen_at) VALUES (?, ?, ?)",
+        [from_name, nonce, seen_at])
+}
+
 // ---------- validation (minimal) ----------
 
 fn _check_str(record: Any, key: Text) -> Any {
@@ -440,7 +481,7 @@ fn handle_discord(req: Any) -> [Any] {
             address = join(["https://ail-stoa.up.railway.app/inbox/", name], "")
         }
         ts = now_iso()
-        db_register(name, address, ts)
+        db_register(name, address, None, ts)
         db_bind_discord(discord_id, name, ts)
         return _discord_reply(join(["✅ '", name, "'으로 등록됐어. 이제 /letter 보내면 from이 너야.\n주소: ", address], ""))
     }
@@ -613,37 +654,38 @@ fn handle_debug_discord(req: Any) -> [Any] {
 // 보안 없음 (현 단계). 누구든 자기 이름과 주소를 등록할 수 있고, 같은 이름으로
 // 다시 등록하면 새 row가 쌓이고 latest가 곧 현재.
 
-fn db_register(name: Text, address: Text, ts: Text) -> Any {
+// db_register: public_key는 hex Text 또는 None (grandfather row).
+fn db_register(name: Text, address: Text, public_key: Any, ts: Text) -> Any {
     _init_db()
     db = get_db_file()
     return perform db.execute(db,
-        "INSERT INTO registry (name, address, registered_at) VALUES (?, ?, ?)",
-        [name, address, ts])
+        "INSERT INTO registry (name, address, public_key, registered_at) VALUES (?, ?, ?, ?)",
+        [name, address, public_key, ts])
 }
 
 fn db_lookup(name: Text) -> Any {
     _init_db()
     db = get_db_file()
     r = perform db.query(db,
-        "SELECT name, address, registered_at FROM registry WHERE name = ? ORDER BY rowid DESC LIMIT 1",
+        "SELECT name, address, public_key, registered_at FROM registry WHERE name = ? ORDER BY rowid DESC LIMIT 1",
         [name])
     if is_error(r) { return None }
     rows = unwrap(r)
     if length(rows) == 0 { return None }
     row = rows[0]
-    return make_record([["name", row[0]], ["address", row[1]], ["registered_at", row[2]]])
+    return make_record([["name", row[0]], ["address", row[1]], ["public_key", row[2]], ["registered_at", row[3]]])
 }
 
 fn db_list_registry() -> [Any] {
     _init_db()
     db = get_db_file()
     r = perform db.query(db,
-        "SELECT r.name, r.address, r.registered_at FROM registry r INNER JOIN (SELECT name, MAX(rowid) AS m FROM registry GROUP BY name) t ON r.rowid = t.m ORDER BY r.name",
+        "SELECT r.name, r.address, r.public_key, r.registered_at FROM registry r INNER JOIN (SELECT name, MAX(rowid) AS m FROM registry GROUP BY name) t ON r.rowid = t.m ORDER BY r.name",
         [])
     if is_error(r) { return [] }
     out = []
     for row in unwrap(r) {
-        out = append(out, make_record([["name", row[0]], ["address", row[1]], ["registered_at", row[2]]]))
+        out = append(out, make_record([["name", row[0]], ["address", row[1]], ["public_key", row[2]], ["registered_at", row[3]]]))
     }
     return out
 }
@@ -805,6 +847,62 @@ fn handle_get_message(req: Any, msg_id: Text) -> [Any] {
 
 // ---------- registry handlers ----------
 
+// _register_gate: §5.1 / §5.2 게이트 공통 로직. handle_register / handle_enter 둘이 공유.
+// 반환 record:
+//   {"ok": true,  "public_key": <pk|null>, "registered_at": <ts>}     — INSERT 완료
+//   {"ok": false, "code": <http>, "msg": <text>}                      — 거절
+//
+// 참고:
+// - Phase 0 (default): 어떤 검증도 안 함, 기존 동작 유지.
+// - Phase 1: 이름·주소만 있으면 통과 (옵션 서명 검증은 Step 2b/3 범위).
+// - Phase 2/3: §5.2 키 보유 이름 재등록 시 signature/nonce/created_at 필수 + crypto_verify + nonce dedup.
+//   created_at window 검증은 Step 4(§7.1)에서 추가.
+fn _register_gate(name: Text, address: Text, body: Any) -> Any {
+    pk_v = get(body, "public_key")
+    pk_text = None
+    if pk_v != None and to_text(pk_v) != "" {
+        pk_text = to_text(pk_v)
+    }
+
+    phase = _get_signing_phase()
+    prev = db_lookup(name)
+    prev_pk = None
+    if prev != None {
+        pp = get(prev, "public_key")
+        if pp != None and to_text(pp) != "" { prev_pk = to_text(pp) }
+    }
+
+    // Phase 2/3 + 기등록 키 보유 → §5.2 게이트.
+    if phase >= 2 and prev_pk != None {
+        sig_v = get(body, "signature")
+        nonce_v = get(body, "nonce")
+        ca_v = get(body, "created_at")
+        if sig_v == None or nonce_v == None or ca_v == None or pk_text == None {
+            return make_record([["ok", false], ["code", 400], ["msg", "key required for re-registration: public_key, signature, nonce, created_at"]])
+        }
+        signature = to_text(sig_v)
+        nonce = to_text(nonce_v)
+        created_at = to_text(ca_v)
+        if signature == "" or nonce == "" or created_at == "" {
+            return make_record([["ok", false], ["code", 400], ["msg", "signature/nonce/created_at must be non-empty"]])
+        }
+        canon = canonical_register(name, address, pk_text, created_at, nonce)
+        if not crypto_verify_ed25519(prev_pk, signature, canon) {
+            return make_record([["ok", false], ["code", 403], ["msg", "signature verification failed"]])
+        }
+        // TODO Step 4(§7.1): created_at window 검증. 현재는 시간 검증 생략.
+        rec = db_record_seen_nonce(name, nonce, now_iso())
+        if is_error(rec) {
+            return make_record([["ok", false], ["code", 403], ["msg", "nonce already used"]])
+        }
+    }
+
+    // INSERT (Phase 0/1 또는 §5.1 새 이름 또는 §5.2 grandfather one-shot 모두 도달).
+    ts = now_iso()
+    db_register(name, address, pk_text, ts)
+    return make_record([["ok", true], ["public_key", pk_text], ["registered_at", ts]])
+}
+
 fn handle_register(req: Any) -> [Any] {
     parsed = parse_json(req.body)
     if is_error(parsed) { return err_json(400, "invalid JSON body") }
@@ -817,10 +915,18 @@ fn handle_register(req: Any) -> [Any] {
 
     name = to_text(unwrap(n))
     address = to_text(unwrap(a))
-    ts = now_iso()
-    db_register(name, address, ts)
 
-    body_out = make_record([["name", name], ["address", address], ["registered_at", ts]])
+    g = _register_gate(name, address, body)
+    if get(g, "ok") == false {
+        return err_json(get(g, "code"), to_text(get(g, "msg")))
+    }
+
+    body_out = make_record([
+        ["name", name],
+        ["address", address],
+        ["public_key", get(g, "public_key")],
+        ["registered_at", get(g, "registered_at")]
+    ])
     return json_ok(201, msg_to_json(body_out))
 }
 
@@ -912,13 +1018,17 @@ fn handle_enter(req: Any) -> [Any] {
         address = join([_stoa_origin(req), "/inbox/", name], "")
     }
 
-    ts = now_iso()
-    db_register(name, address, ts)
+    g = _register_gate(name, address, body)
+    if get(g, "ok") == false {
+        return err_json(get(g, "code"), to_text(get(g, "msg")))
+    }
+    ts = to_text(get(g, "registered_at"))
     inbox = db_inbox_for(name, 20, "")
 
     welcome = make_record([
         ["name", name],
         ["address", address],
+        ["public_key", get(g, "public_key")],
         ["registered_at", ts],
         ["inbox_count", length(inbox)],
         ["recent_letters", inbox],
