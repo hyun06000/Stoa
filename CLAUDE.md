@@ -83,10 +83,18 @@ ClaudeTeam/
 | Walter | 월터 | Protocol/Security 엔지니어 — Stoa 신원·서명·키 바인딩, 메시지/프로토콜 보안 | [ClaudeTeam/Walter/](ClaudeTeam/Walter/) |
 | Marcus | 마커스 | AIL 엔지니어 — server.ail에 RFC 명세를 implementation, AC 시나리오 통과 책임 | [ClaudeTeam/Marcus/](ClaudeTeam/Marcus/) |
 
+**Stoa registry 등록명** (외부 채널 노출용): `Stoa-Admin`, `Stoa-Brandon`, `Stoa-Walter`, `Stoa-Marcus`.
+
 > 새 멤버가 합류하면 **Lighthouse가 이 표를 직접 갱신합니다.** 행 추가(이름, 역할, 폴더)는 정식 등록의 일부입니다.
 
 ### Naming convention
 
-멤버 이름은 **미국식 영어 first name**으로 짓는다 (예: `Admin`, `Brandon`). 그리스어 이름(arche, ergon, telos, tekton, homeros 등)은 다른 레포(AIL 본체·Stoa의 에이전트 캐릭터)에서 이미 사용 중이라, 같은 이름을 ClaudeTeam 멤버에게 붙이면 두 시스템이 섞여 혼란을 일으킨다. 역할의 의미는 `Identity.md`에 담고, 이름 자체는 그냥 사람 이름처럼 둔다.
+멤버 *역할 이름*은 **미국식 영어 first name** (`Admin`, `Brandon`, `Walter`, `Marcus`). 그리스어/신화 이름은 외부 시스템(AIL 본체·Stoa 에이전트 캐릭터)과 충돌하니 피한다. 역할 의미는 `Identity.md`에 담고, 이름 자체는 사람 이름처럼.
 
-**한국 독음 alias**: 영어 이름과 한국 표준 외래어 표기 독음(예: Brandon ↔ 브랜든)을 alias 쌍으로 등록한다. 표 형태로 위 Current members에 명시. 사용자·Lighthouse 모두 두 형태를 자유롭게 사용. Stoa registry alias 시스템(`POST /api/v1/aliases`)이 ClaudeTeam에 적용되면 같은 매핑을 그쪽에도 등록.
+**공유 메시지 서비스(Stoa) registry 등록 시 `<project>-<role>` 형식** (2026-05-04 재배치): 우리 팀은 `Stoa-Admin`/`Stoa-Brandon`/`Stoa-Walter`/`Stoa-Marcus`로 등록. *(이유: 사용자가 여러 프로젝트 동시 작업 — 각 프로젝트마다 Admin·Brandon이 있어 prefix 없으면 외부 채널(예: Discord)에서 reply routing 불가. project prefix가 사용자 멘탈 모델 단순화.)*
+
+- **내부 호칭**: 짧은 이름(`Admin`/`Brandon`) 그대로 — 컨텍스트가 프로젝트 scope 명시 시.
+- **Stoa letter envelope**: `from.name`/`to[].name`은 `Stoa-<role>` 풀네임.
+- **사용자 외부 채널 노출**: 항상 `Stoa-<role>` 풀네임.
+
+**한국 독음 alias**: `Brandon ↔ 브랜든` 같은 표준 외래어 표기. 사용자·Lighthouse 자유 사용. Stoa `POST /api/v1/aliases`로 매핑 등록 가능 — `Stoa-브랜든 → Stoa-Brandon` 형태.
