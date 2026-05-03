@@ -115,6 +115,50 @@ fn canonical_register(name: Text, address: Text, public_key: Text, created_at: T
     ], "")
 }
 
+// _sort_recipients_by_name: §6.1 — `to` 리스트를 name lex 오름차순 정렬.
+// AIL stdlib `sort([T])`는 key fn 인자를 안 받음 → selection sort 직접.
+// 입력 record 형태 `{name, address}`. 반환은 같은 record 형태의 정렬된 새 리스트.
+fn _sort_recipients_by_name(recipients: [Any]) -> [Any] {
+    n = length(recipients)
+    pool = []
+    for r in recipients { pool = append(pool, r) }
+    out = []
+    for _ in range(0, n) {
+        m = length(pool)
+        best = 0
+        for i in range(1, m) {
+            if to_text(get(pool[i], "name")) < to_text(get(pool[best], "name")) {
+                best = i
+            }
+        }
+        out = append(out, pool[best])
+        new_pool = []
+        for i in range(0, m) {
+            if i != best { new_pool = append(new_pool, pool[i]) }
+        }
+        pool = new_pool
+    }
+    return out
+}
+
+// canonical_letter: §6.1 letter 서명 대상 메시지.
+// 형식: letter|<from_name>|<from_address>|<sorted_to>|<content>|<created_at>|<nonce>
+// sorted_to = name lex asc 정렬 후 `<name>:<address>` 들을 `;`로 join.
+fn canonical_letter(from_name: Text, from_address: Text, recipients: [Any], content: Text, created_at: Text, nonce: Text) -> Text {
+    sorted_to = _sort_recipients_by_name(recipients)
+    parts = []
+    for r in sorted_to {
+        parts = append(parts, join([
+            _esc(to_text(get(r, "name"))), ":", _esc(to_text(get(r, "address")))
+        ], ""))
+    }
+    to_str = join(parts, ";")
+    return join([
+        "letter|", _esc(from_name), "|", _esc(from_address), "|",
+        to_str, "|", _esc(content), "|", _esc(created_at), "|", _esc(nonce)
+    ], "")
+}
+
 // _get_signing_phase: STOA_SIGNING_PHASE env. 미설정/오설정은 0. (RFC §8, §10.5.)
 fn _get_signing_phase() -> Number {
     r = perform env.read("STOA_SIGNING_PHASE")
@@ -762,12 +806,84 @@ fn handle_post_message(req: Any) -> [Any] {
     if is_error(v) { return err_json(400, unwrap_error(v)) }
     norm = unwrap(v)
 
+    from_name = to_text(get(norm, "from_name"))
+    from_address = to_text(get(norm, "from_address"))
+    content = to_text(get(norm, "content"))
+
+    // §6.4 검증 시점 — Stoa 진입 시 단일 게이트.
+    // signature/nonce/created_at는 client 측 envelope. 검증 흐름이 활성이면
+    // canonical 재구성에 client created_at 사용해야 함(서명·검증 byte 일치).
+    sig_v = get(body, "signature")
+    nonce_v = get(body, "nonce")
+    ca_v = get(body, "created_at")
+    has_sig_claim = sig_v != None and to_text(sig_v) != ""
+
+    sender = db_lookup(from_name)
+    sender_pk = None
+    if sender != None {
+        spk = get(sender, "public_key")
+        if spk != None and to_text(spk) != "" { sender_pk = to_text(spk) }
+    }
+    phase = _get_signing_phase()
+
+    // verify_required 결정 (RFC §8 표):
+    //   Phase 0: 결코 안 함.
+    //   Phase 1: 서명 *주장*하면 강제(없으면 통과).
+    //   Phase 2: sender_pk != None 이면 강제. None이면 무서명 통과(grandfather).
+    //   Phase 3: 항상 강제. sender_pk == None 이면 검증 자체 불가 → 403.
+    verify_required = false
+    if phase == 1 and has_sig_claim { verify_required = true }
+    if phase == 2 and sender_pk != None { verify_required = true }
+    if phase == 3 { verify_required = true }
+
+    if phase == 3 and sender_pk == None {
+        return err_json(403, "key required: sender has no registered public_key (Phase 3)")
+    }
+
+    if verify_required {
+        if not has_sig_claim or nonce_v == None or ca_v == None {
+            return err_json(400, "signature, nonce, created_at required at this phase")
+        }
+        if sender_pk == None {
+            // Phase 1 서명 *주장* 했으나 발신자 키 없음 → 검증 불가.
+            return err_json(403, "signature claimed but sender has no registered public_key")
+        }
+        signature = to_text(sig_v)
+        nonce = to_text(nonce_v)
+        client_created_at = to_text(ca_v)
+        if signature == "" or nonce == "" or client_created_at == "" {
+            return err_json(400, "signature/nonce/created_at must be non-empty")
+        }
+        // canonical: norm 의 raw recipients (resolve 전) + client created_at + nonce.
+        // 발신자 측 서명 대상이 정확히 이 형식이어야 함 (alias 해소·address rewrite 전).
+        raw_recipients = []
+        for r in get(norm, "recipients") {
+            raw_recipients = append(raw_recipients, make_record([
+                ["name", get(r, "name")],
+                ["address", get(r, "address")]
+            ]))
+        }
+        canon = canonical_letter(from_name, from_address, raw_recipients, content, client_created_at, nonce)
+        if not crypto_verify_ed25519(sender_pk, signature, canon) {
+            return err_json(403, "signature verification failed")
+        }
+        // TODO Step 4(§7.1): created_at window 검증.
+        rec = db_record_seen_nonce(from_name, nonce, now_iso())
+        if is_error(rec) {
+            return err_json(403, "nonce already used")
+        }
+    }
+
     _init_db()
     msg_id = make_id()
+    // 저장 created_at: 검증 통과한 흐름이면 client 값(서명 round-trip 가능),
+    // 그 외에는 server now (legacy / Phase 0).
     created_at = now_iso()
+    if verify_required { created_at = to_text(ca_v) }
 
     // recipients: alias → canonical 해소. address도 registry 기준으로 갱신
     // (사용자가 alias 적었을 때 latest canonical address로 보내도록).
+    // 주의: alias 해소는 push 흐름용이며, 서명 canonical은 위에서 raw로 처리.
     resolved_recipients = []
     for r in get(norm, "recipients") {
         rname = to_text(get(r, "name"))
@@ -782,24 +898,30 @@ fn handle_post_message(req: Any) -> [Any] {
     }
 
     // INSERT only — code path has no UPDATE / no DELETE.
-    db_insert_letter(msg_id,
-        to_text(get(norm, "from_name")),
-        to_text(get(norm, "from_address")),
-        to_text(get(norm, "content")),
-        created_at)
+    db_insert_letter(msg_id, from_name, from_address, content, created_at)
     for r in resolved_recipients {
         db_insert_recipient(msg_id, to_text(get(r, "name")), to_text(get(r, "address")))
     }
 
+    // §6.5 envelope 보존 — signature/nonce/created_at 그대로 forward.
+    // verify_required 흐름이 아니어도 client가 signature 보냈으면 echo (Phase 0/1
+    // optional 흐름 호환).
+    sig_echo = None
+    nonce_echo = None
+    if has_sig_claim { sig_echo = to_text(sig_v) }
+    if nonce_v != None and to_text(nonce_v) != "" { nonce_echo = to_text(nonce_v) }
+
     envelope = make_record([
         ["id", msg_id],
         ["from", make_record([
-            ["name", get(norm, "from_name")],
-            ["address", get(norm, "from_address")]
+            ["name", from_name],
+            ["address", from_address]
         ])],
         ["to", resolved_recipients],
-        ["content", get(norm, "content")],
-        ["created_at", created_at]
+        ["content", content],
+        ["created_at", created_at],
+        ["nonce", nonce_echo],
+        ["signature", sig_echo]
     ])
 
     // notify_discord 먼저 — push가 timeout으로 raise하면 핸들러가 500되어
