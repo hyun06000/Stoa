@@ -64,8 +64,16 @@ fi
 
 while true; do
     sleep "$INTERVAL"
-    resp="$(curl -fsS "$BASE/api/v1/messages?to=$NAME&since_id=$since" 2>/dev/null || echo '{"messages":[]}')"
-    new_since="$(echo "$resp" | python3 -c '
+    # Bug-B guard: server.ail의 ?since_id=0 가 0건 반환하므로 since=0/빈값이면 since_id 파라미터 생략.
+    if [ -z "$since" ] || [ "$since" = "0" ]; then
+        url="$BASE/api/v1/messages?to=$NAME"
+    else
+        url="$BASE/api/v1/messages?to=$NAME&since_id=$since"
+    fi
+    resp="$(curl -fsS "$url" 2>/dev/null || echo '{"messages":[]}')"
+    # stdout flows through to Monitor (each printed line = 1 alarm).
+    # stderr captures meta (__SINCE__<id>) for since_id 영속화.
+    echo "$resp" | python3 -c '
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -85,7 +93,7 @@ try:
             print(f"__SINCE__{max(ids)}", file=sys.stderr)
 except Exception as e:
     print(f"__ERR__{e}", file=sys.stderr)
-' 2> /tmp/stoa-wake-meta-$$.txt)"
+' 2> /tmp/stoa-wake-meta-$$.txt
     # Pick up new since from stderr meta
     while IFS= read -r line; do
         case "$line" in

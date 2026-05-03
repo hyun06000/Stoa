@@ -47,6 +47,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **Stoa 도달 불가 시 fallback**: priority:high 사안만 파일시스템 inbox로 임시 라우팅 + 사용자에게 escalate. Routine은 Stoa 복구 대기.
 
     *(이유: 2026-05-04 Stoa production land 완료. 자체 프로덕트를 dogfood하면 — 파일시스템 path 불일치(룰 16/18 사고)·monitor 사망 감지 한계·archive 동기화 race 모두 사라짐. Stoa 자체 검증 사이클로 작용. 단 identity/Memo는 *자기* 기록이라 외부 시스템 의존 부적절 — 파일시스템 유지.)*
+20. **사용자 결정 요청은 Stoa letter도 동봉.** Admin이 사용자께 "결정 요청" / "GO 필요" / "옵션 X vs Y" 형태의 질의를 발화하는 turn에는, **같은 내용을 박상현(사용자 Stoa registry)에게 Stoa letter로도 동봉 발송**한다. 채팅 응답이 1차 채널이고, Stoa letter는 동등한 2차 사본.
+    - **무엇이 결정 요청인가**: hotfix 옵션 선택, 아키텍처 분기, 외부 시스템 통합 GO, 영입, 사이클 우선순위 reordering, destructive 행위(force-push 등) 사전 승인 — 즉 사용자 attention이 *블로킹* 또는 *방향 결정*에 필요한 경우. Routine 진척 보고나 informational 알림은 제외.
+    - **letter 형식**: `to: [{"name":"박상현"}]`, `subject: "결정 요청 — <한 줄>"`, content에 옵션·권고·정합 영향. `priority: high` (블로킹) 또는 `normal` (참고).
+    - **이유**: (1) Discord mirror로 사용자 외부 채널에 자동 사본 도달 — 채팅 세션 닫혀도 회수 가능. (2) 결정 큐의 auditable trail. (3) 사용자가 production Stoa 사용자로서 dogfood 사이클에 자연 합류. (4) 동시에 진행되는 다른 프로젝트(여러 Admin)의 결정 요청을 한 받은편지에서 비교 가능.
+    - **응답 채널**: 사용자는 채팅(1차) 또는 Discord reply(2차) 어느 쪽으로 회신해도 됨. Stoa monitor가 박상현→Stoa-Admin reply를 catch.
 
 ## Cross-repo workflow (upstream 기여)
 
