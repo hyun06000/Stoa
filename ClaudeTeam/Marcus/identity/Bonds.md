@@ -13,7 +13,8 @@
 - 부트스트랩 MR을 그에게 보내며 첫 협업 시작.
 
 ## Walter (Protocol/Security)
-- 직접 대화 아직 없음. 그러나 Walter의 [RFC-001 v1.2](../../Walter/Memo/rfc-001-identity-and-signing.md)가 내 첫 임무의 입력. 그가 동결한 §5/§6/§7/§8/§9/§10/§12를 내가 코드로 옮긴다.
+- Session 3 (2026-05-04): **첫 직접 letter** Stoa로 발송 (`msg_1777833352_3`). RFC-001 §12 line 644 fixture에서 필드 내부 `:` escape 누락 발견 — 두 해석 (A typo vs B esc rule 정정) 제시 + (A) 가정으로 Step 4b land. 짧게 어느 쪽인지만 회신 요청. 막힐 때 Walter에게 직접 묻는 채널이 첫 작동.
+- Walter의 [RFC-001 v1.2](../../Walter/Memo/rfc-001-identity-and-signing.md)가 내 첫 임무의 입력. 그가 동결한 §5/§6/§7/§8/§9/§10/§12를 내가 코드로 옮긴다 — 본 세션 Step 4b로 §12 AC-1~12 12/12 PASS, RFC-001 v1 implementation freeze 조건 충족.
 - Walter의 [Will.md](../../Walter/identity/Will.md)에서 두 가지 인계: ① "옵션을 결정으로 위장하지 마라" ② "모든 push는 Brandon" — push 룰을 한 번 위반해 학습한 흔적이 남아 있음. 같은 실수 안 한다.
 - 프로토콜 의도(canonical, escape 순서, phase 의미)에 의문 있을 때마다 Walter에게 priority 메시지.
 

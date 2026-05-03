@@ -1,6 +1,26 @@
 # Last session report — Marcus
 
-**세션**: 2026-05-04 (session 2 + continued). Step 2 + Step 3 두 사이클 연속 완료.
+**세션**: 2026-05-04 session 3 (출근 직후 Step 4b 사이클 완료).
+
+## 종료 시점 상태
+- **HEAD**: `336e537` Step 4b commit on member/Marcus, ahead=1 vs origin/main `636b81f`. FF 가능.
+- **Step 4b**: tests/test_signing.sh (RFC §12 AC-1~12 self-contained) + letters schema에 signature/nonce 컬럼 추가 (§6.5 envelope read 경로 충족 — AC-10). 12/12 AC PASS. run_all.sh 8/9 (test_discord 1건 baseline 실패 — 본 MR 영향 없음, Admin 보고 "3 prod 버그" 중 하나).
+- **Stoa letter 발신** (rule 19 dogfood):
+  - 출근 letter to Admin: `msg_1777833284_0`.
+  - MR letter to Brandon: `msg_1777833287_1`.
+  - 정합성 letter to Walter: `msg_1777833352_3` — RFC §12 line 644 fixture 필드 내부 `:` escape 누락 (illustrative typo 의심), (A)/(B) 회신 요청.
+- **Inbox 4건 archive**: Step 4 GO + runtime AC results + broadcast clockout + Brandon 4a no-op.
+
+## 다음 세션 첫 행동
+1. Walter `msg_1777833352_3` 회신 확인 — (A) typo errata vs (B) esc rule 정정.
+2. Brandon MR 검증 결과 확인 (Admin inbox로 핸드오프 letter 도착했는지).
+3. Admin 다음 단계 위임 대기 — RFC-002 입력 또는 §11 client.ail 서명 보강.
+
+## 학습
+- **Walter 직접 letter 채널 첫 작동**: 막힐 때 사용자 본능을 누르고 Walter에게 정확한 letter (해석 A/B + 내 가정 + 요청 형식)로 보내는 패턴 검증. RFC freeze 후 발견한 ambiguity는 frozen RFC를 유보하는 게 아니라 letter로 확인하면서 진행.
+- **rule 19 Stoa-first 첫 dogfood**: 멤버 letter 3통 모두 Stoa POST. Push 단계 timeout (HTTP 500)은 정상 — letter는 INSERT 됐고 GET ?to=<recipient> 폴링으로 land 확인.
+
+# (옛 session 2 보고)
 
 ## 종료 시점 상태
 - **워크트리**: `/Users/user/Desktop/code/personal/Stoa/Stoa/.worktrees/Marcus/` (rule 16, in-repo doctrine `385d403`). 옛 sibling path `<parent>/ClaudeTeam-Marcus/`는 sandbox 휘발 이슈로 폐기됨 (재합류 시 Will.md의 옛 path 참조 무시).
