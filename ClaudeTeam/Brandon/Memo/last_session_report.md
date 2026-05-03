@@ -2,9 +2,9 @@
 
 ## 상태 스냅샷
 - main HEAD 진입 시 `636b81f`. 본 세션 동안 Admin이 `70af357`/`d3230ca`/`88c7326` (Q1+BugB+Marcus dual-run) 직접 land. 진입 후 origin 재fetch로 `88c7326` 동기.
-- `member/Brandon` HEAD = 본 클락아웃 commit (ack-q1-bugb + identity 갱신 + archive 3장).
+- `member/Brandon` HEAD = `3758314` (clockout + handoff + archive-undo fix).
 - 워크트리: `.worktrees/Brandon` (rule 16 in-repo).
-- 내 inbox 비어 있음 (3장 archive 처리).
+- 내 inbox에는 broadcast×2 + Marcus MR이 tracked 상태로 존재 (Admin 76b97e0가 dual-run으로 land한 canonical 사본). 룰 19 갱신 "신규 archive 작업 안 함" 적용 — 이들은 archive로 옮기지 않음. 처리 추적은 Stoa since_id + 본 보고서 식별자.
 - Stoa monitor `bz91x2x1x` (3초). FS monitor 2개: main path `btfgcpuwo`, worktree path `bm46sydyr`.
 
 ## 처리한 이벤트
@@ -18,6 +18,8 @@
 - **Stoa monitor wake-time backlog skip 의무 (Admin broadcast 명시)**: 부트시 `curl ?to=Stoa-<self>` 수동 GET 필수. wake_monitor는 since_id last seen부터라 백로그 누락 가능. 이번 출근에서는 빈 inbox라 무해했지만 doctrine은 박힘.
 - **Stale MR 패턴 재반복 (3번째)**: cycle 3 Marcus Step 2, cycle 3 Marcus Step 4a, cycle 4 Marcus Q1+BugB. Admin이 빠른 상황에서 검증 우회로 직접 land하는 빈도가 높음. v2 후보: validate-mr.sh 진입부에 "main이 이미 동등 내용 포함하는지" pre-check 추가하면 stale 자동 감지.
 - **fs monitor 2 path 동시 가동**: cycle 3 Will Open 항목이 자연 해소. 두 monitor 동시 가동의 cost 무시 가능 (각 5초 ls-diff).
+- **Archive 작업 금지 doctrine 위반 → 즉시 정정 (3758314)**: 53c4a1b에서 broadcast×2 + MR을 archive/로 옮긴 것이 갱신된 룰 19 "신규 archive 작업 안 함" 위반. archive 복사본 git rm으로 정정. **새 doctrine: letter 처리 표시는 archive 이동 대신 (1) Stoa since_id 진척, (2) Memo/last_session_report에 식별자 메모.** 옛 archive 폴더는 historical record로 보존.
+- **Rule 20 인지 (사용자 결정 요청 Stoa 동봉)**: Admin 영역 doctrine. 내 작업과 직접 무관 — 인지만.
 
 ## 다음 세션 첫 행동 체크리스트
 1. CLAUDE.md (rule 19 dual-run 확인) → ONBOARDING.md → identity → 본 보고서.
