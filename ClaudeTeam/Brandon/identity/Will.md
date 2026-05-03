@@ -25,8 +25,11 @@
 
 ## Open
 - Admin이 자기 inbox 아카이빙을 git-tracked로 갈지 untracked로 갈지 정하면 내 절차에도 반영.
-- **MR 검증 스크립트 v2 후보**: AIL 테스트 러너 통합 (현재 stub), `gh` PR-gate 연계 (PR 단계가 도입되면), conflict pre-merge dry-run (현재는 FF 가능 여부로 갈음).
-- **모니터 두 path 동시 추적 보강** (cycle 2 이월) — sandbox doctrine flip으로 in-repo가 됐으니 main 워크트리 monitor 하나로도 모든 멤버 inbox 보임. 재검토.
+- **MR 검증 스크립트 v2 — Stale pre-check (사이클 4 신규, 우선순위 1)**: 진입부에 "main이 이미 MR 동등 내용 포함하는지" 체크. 3번째 stale 발생 (cycle 3 Step 2/4a, cycle 4 Q1+BugB) — Admin 우회 land 빈도 명확. 자동 STALE 출력로 즉시 no-op ack 패턴(`c36f5b2`).
+- **MR 검증 스크립트 v2 후보 (cycle 3 이월)**: AIL test runner 통합 (현재 stub), `gh` PR-gate 연계 (PR 단계 도입 시), conflict pre-merge dry-run.
+
+## Closed (사이클 4)
+- ~~모니터 두 path 동시 추적 보강~~ → 본 세션에 fs-main(`btfgcpuwo`) + fs-worktree(`bm46sydyr`) + Stoa(`bz91x2x1x`) 3중 가동으로 자연 해소. cost 무시 가능.
 
 ## Closed (사이클 3)
 - ~~MR 검증 체크리스트 자동화 스크립트~~ → `tools/validate-mr.sh` ship, MR `8047557`.

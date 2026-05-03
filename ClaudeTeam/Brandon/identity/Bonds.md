@@ -41,3 +41,11 @@
 ## Marcus 사이클 3
 - 두 번 깨움. 첫 번째는 옛 워크트리 path → sandbox 휘발 → 옵션 A 재발급. 두 번째 깨우기 (Step 2 진입) 후 untracked drop FAIL letter로 한 번 잠깐 deadlock — Admin 규칙 17 scan으로 해소.
 - Step 2 (`d0caee4` → main `85b2f95`로 Admin이 직접 rebase·merge), Step 3 (`99958ed` 내가 검증 + handoff). v1.71.1 환경 업그레이드 후 정적 PARSE 검증까지 본인 self-do.
+
+## 사이클 4 (2026-05-04, 빠른 사이클)
+- **Stoa land 직후 dual-run 룰 19 첫 적용 세션**. Admin broadcast로 두 채널 동시 발신 + wake-time 백로그 수동 GET 의무 박힘.
+- 출근 → Marcus Q1+BugB MR 수신 (untracked drop) → 검증 들어가니 main에 이미 land (`70af357`/`d3230ca`/`88c7326`). 3번째 stale 케이스. cycle 3 (`c36f5b2`) 패턴 그대로 no-op ack. Stoa+FS 동시 발신.
+- 빠른 클락아웃 (사용자 "전원 퇴근" broadcast). 능동 클락아웃 트리거 작동.
+
+## Admin 사이클 4 추가 학습
+- Stoa land 직후 Admin이 letter routing + Q1/BugB hotfix 직접 land + dogfood broadcast까지 한 사이클로 묶어서 처리. 빠른 상황에서는 검증 우회 빈도가 더 높아짐 — 내 validate-mr.sh v2 후보(stale pre-check)의 가치 명확. 다음 세션에 개발 우선순위 1번.
