@@ -28,6 +28,8 @@
 - `reply_to` 답신 필수. `---END-OF-CONVERSATION---`이 스레드를 닫는다.
 - **규칙 12**: 멤버는 idle 진입 직전 Admin inbox에 "대기 중 — <X>" 편지 의무. idle 편지는 활성화될 때까지 inbox에 둔다(상태 신호).
 - **ONBOARDING §1.6 강화** (2026-05-01 Marcus deadlock으로 굳힘): 워크트리 발급 후 monitor 대상은 워크트리 path로 이동. main path는 발급 전 phase 전용. Brandon은 워크트리 발급 시 환영 편지를 commit + push로 main에 sync하거나 Admin에게 라우팅 신호. 버전 싱크 시 untracked inbox·dead monitor 점검 의무.
+- **규칙 19 dual-run** (2026-05-04 갱신): Stoa 검증 기간 letter는 Stoa + 파일시스템 두 채널 모두 발신. 세션 시작 시 Stoa 백로그 수동 드레인 의무 (`curl ?to=<self>` GET) — wake_monitor가 부트 backlog skip하므로 보완.
+- **규칙 20** (2026-05-04 land): 사용자 결정 요청 turn에 박상현에게 Stoa letter 동봉. Discord mirror로 외부 채널 사본 + auditable trail.
 
 ### 사용자 신호 (TTS)
 - `say here` — active 대화 중 hot 블로킹 결정 호출.
@@ -72,10 +74,10 @@
 (force-push GO 큐는 2026-05-04 사용자 standing "앞으로의 깃 푸시 모두 승인"으로 close. AIL 환경 업그레이드도 이날 처리.)
 
 ### 다음 세션 작업
-- **Marcus**: Step 4 (§7 Replay defense — `seen_nonces` INSERT 게이트 + `created_at` ±5분 window) + AC-1~12 sh+curl runtime 묶음 active. RFC-002 §6 platform key 구현은 Step 4 후. Step 3 main land(`65d8918`).
-- **Walter**: RFC-002 v1 main land(`a2c37e9`) 후 idle 클락아웃. 다음 RFC 또는 §6 구현 보조 대기.
-- **Brandon**: 사이클 3 sub-1 클락아웃 유지. Marcus Step 4 MR 도착 시 자동 wake.
-- **Admin**: 모니터 + Marcus 라우팅 + Brandon handoff 시 push. 룰 17 deadlock scan 매 idle 진입 전.
+- **Marcus**: Step 4b/Q1/Bug B land 완료 (`88c7326`, 15/15 PASS). 다음 후보: §11 client.ail / RFC-002 §6 attestation full (Step 5/6 platform key) / Walter §12 fixture 정합 회신 처리.
+- **Walter**: RFC-002 v1 main land + 사이클 4 진입 (`Q1 권고` letter `msg_1777832234_2`). Marcus §12 fixture letter 회신 대기.
+- **Brandon**: 사이클 3 종료 클락아웃 유지. Marcus 다음 MR 도착 시 자동 wake.
+- **Admin**: 모니터 (Stoa + 파일시스템 dual) + 라우팅 + push. 룰 17 deadlock scan 매 idle 진입 전. 룰 20 적용 — 사용자 결정 요청 turn에 박상현 Stoa letter 동봉.
 
 ### 후속 영입 후보
 - **Rachel** (QA/CI) — Marcus implementation이 한 두 번 돌고 회귀 가드 필요해질 시점에 영입 신호.

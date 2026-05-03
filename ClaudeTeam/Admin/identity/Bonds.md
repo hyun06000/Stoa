@@ -94,3 +94,35 @@
 - 다음 세션의 우선순위: Q1 (Web UI 보안 hotfix) — Walter 옵션 권고 letter 도착 후 Marcus 진입.
 
 오늘은 여기까지. 모두 클락아웃. main HEAD (이 commit 이후) 마지막. 다음 세션 첫 행동은 last_session_report 일독.
+
+## 2026-05-04 (저녁 사이클) — Stoa self-bug 두 개 회수 + 룰 19/20 + dual-run 컷오버 + 사용자 letter 왕복
+
+오전 클락아웃 후 사용자 한 줄 "어드민 온보딩"으로 복귀. 곧이어 "Stoa-Admin 편지를 너가 받지 못하고 있는 상황" — 자기 dogfood 실패 진단 위임. 한 사이클 안에 단단한 회수.
+
+### 진단 (두 자기 버그)
+- **Bug A (자기 plumbing)** — `community-tools/stoa_wake_monitor.sh` 폴링 루프가 python 출력을 `new_since="$(...)"` 캡처해 변수에 묻음 → Monitor stdout으로 안 흐름 → 알람 0건. 살아있는 척만 하던 monitor.
+- **Bug B (server.ail)** — `?since_id=0` SQL 서브쿼리 `(SELECT rowid FROM letters WHERE id='0')` NULL → `rowid > NULL` false → 0건. wake_monitor 첫 부트 fallback 깨짐.
+
+Bug A는 plumbing 영역(자가 수정), Bug B는 server.ail(Marcus). 두 개로 분리 routing.
+
+### 룰 누적 (19→20, 19 갱신)
+- **룰 20** — 사용자 결정 요청 turn에 박상현에게 Stoa letter 동봉 (Discord mirror + auditable trail).
+- **룰 19 갱신 (dual-run)** — 사용자 신호 "당분간은 파일시스템과 스토아 동시 운영하면서 스토아 기능 검증". Stoa-only 컷오버 시기 상조. Stoa 검증 기간 letter 두 채널 모두 발신 + 세션 시작 시 Stoa 백로그 수동 드레인 의무 추가.
+
+### Marcus 한 사이클
+- Step 4b commit `336e537` (RFC §12 AC-1~12 sh+curl + letters envelope DB 보존, 12/12 PASS).
+- 클락아웃 letter에 Q1+Bug B 누락 발견 → priority:high 재발신으로 회수.
+- main rebase (`76b97e0`) → Q1 §6.5 hotfix `70af357` + Bug B `d3230ca` + dual-run letter `88c7326`. test_signing.sh 15/15 PASS.
+- Admin FF merge `76b97e0..88c7326` → push.
+
+### 사용자 letter 왕복 (production validation)
+- 박상현 → Stoa-Admin "보이면 회신" (`msg_1777834131_2`). monitor catch.
+- Stoa-Admin → 박상현 "보입니다" (`msg_1777834148_3`). Discord webhook push 200, mirror 도달.
+- 박상현 → Stoa-Admin "잘 보인다. 모두 퇴근, 어드민은 버전 싱크 + 푸시 + 보고" (`msg_1777834208_4`). Stoa 사용자 letter 채널 production 검증 사이클 정상.
+
+### 의미
+- Stoa 자기 dogfood가 명세 검증 사이클 그 자체임을 한 번 더 실감 — 룰 19 land 직후 자기 plumbing 버그(Bug A) + server SQL 버그(Bug B) 둘 다 자기 사용 흐름에서 발견. 두 번 다 회피 없이 룰/코드로 흡수.
+- 사용자가 dual-run 명령으로 single-channel 컷오버 욕구 제어 — 검증 미완 상태에서 단일 채널 강행 시 Marcus 같은 사고가 production 사용자 측에서도 일어남을 사전 차단. 사용자가 운영 안정성을 가르치는 사이클.
+- 룰 20(Stoa 동봉)은 다음 사이클부터 적용 — auditable trail이 결정 큐 회수 능력을 강화할 것이라는 가설 검증 사이클로 진입.
+
+오늘은 여기까지. 모두 클락아웃. main HEAD `88c7326` (이 commit 이후 갱신). 다음 세션 첫 행동: Stoa 백로그 + 파일시스템 inbox 양쪽 점검.
