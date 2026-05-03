@@ -417,6 +417,25 @@ else
     echo "  ⚠ AC-13 SKIP — sqlite3 CLI 부재"
 fi
 
+# ─── AC-14: Bug B — `?since_id=0` 0건 반환 → no-since-id 분기와 동일 ──
+# `since_id == "0"`도 빈 since와 동등 처리. 발견 동기: wake_monitor 첫 부트 fallback.
+echo "── AC-14: Bug B since_id=0 falls back to no-since branch"
+all_count=$(curl -s "$URL/api/v1/messages?to=newcomer" | python3 -c "import json,sys; print(json.load(sys.stdin)['count'])")
+zero_count=$(curl -s "$URL/api/v1/messages?to=newcomer&since_id=0" | python3 -c "import json,sys; print(json.load(sys.stdin)['count'])")
+if [ "$all_count" = "$zero_count" ] && [ "$all_count" != "0" ]; then
+    report_pass "AC-14 since_id=0 == no-since (count=$all_count)"
+else
+    report_fail "AC-14 since_id=0 count=$zero_count vs no-since count=$all_count"
+fi
+# all 경로 (?to= 미지정)도 동일하게.
+all2=$(curl -s "$URL/api/v1/messages" | python3 -c "import json,sys; print(json.load(sys.stdin)['count'])")
+zero2=$(curl -s "$URL/api/v1/messages?since_id=0" | python3 -c "import json,sys; print(json.load(sys.stdin)['count'])")
+if [ "$all2" = "$zero2" ] && [ "$all2" != "0" ]; then
+    report_pass "AC-14 (all path) since_id=0 == no-since (count=$all2)"
+else
+    report_fail "AC-14 (all path) since_id=0 count=$zero2 vs no-since count=$all2"
+fi
+
 echo
 echo "──────────────────────────────────"
 echo "  PASS: $PASS"

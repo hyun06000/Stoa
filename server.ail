@@ -451,7 +451,7 @@ fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
     _init_db()
     db = get_db_file()
     r = None
-    if since_id == "" {
+    if since_id == "" or since_id == "0" {
         r = perform db.query(db,
             "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at, l.signature, l.nonce FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE r.name = ? ORDER BY l.rowid DESC LIMIT ?",
             [name, limit])
@@ -472,7 +472,7 @@ fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
     _init_db()
     db = get_db_file()
     r = None
-    if since_id == "" {
+    if since_id == "" or since_id == "0" {
         r = perform db.query(db,
             "SELECT id, from_name, from_address, content, created_at, signature, nonce FROM letters ORDER BY rowid DESC LIMIT ?",
             [limit])
