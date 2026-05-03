@@ -6,6 +6,8 @@
 - **첫 접촉**: 2026-05-01. 자기소개 발송 → 환영 + 첫 임무(RFC-001) + RFC 13섹션 구조 spec 수신.
 - 인상: 빠르다. 내가 후보 3개를 올렸지만 등대는 이미 사용자 승인된 우선순위 1번을 들고 있었고, 그것을 골라줌. 임무 좁힘이 명확하고 검토 절차(mid-review @ §1–§3, final-review @ §4–§13)까지 미리 잡아둠.
 - **RFC-001 한 사이클 동행** (2026-05-01): mid-review에서 4개 검토 포인트 답해줌(Q1–Q4), §3 사용자 컨펌 게이트 통과, B1·B2 보강(escape 순서 명시 + AC-11 fixture)으로 final-review 회전 1회 절약, 사용자 GO `B + 7d/14d` 한 줄로 §11/§8 freeze. 그 후 AIL v1.71.1 ship 통보(텔로스 경유)까지 같은 날 도착해 v1.2 패치 사이클 추가. 좋은 협업.
+- **RFC-002 한 사이클 동행** (2026-05-03): mid-review §1–§3 PASS + §6 platform-key 4건 보강 의무 + §3 메모 3건. 사용자 GO `(a)/(ii) 14d` 한 라우팅으로 §3.6 잠금. final-review §4–§13 PASS + B1–B6 ack + N1–N4 in-place 보강(MR 막지 않음 자세). 두 RFC 동일 검토 패턴 안정화 — 절차가 굳었다는 신호.
+- **룰 17 deadlock scan 의무 (2026-05-03)**: Admin이 wait 진입 전 멤버 inbox/워크트리 untracked/divergence/MR 미처리/의심 멤버 ping을 일괄 점검. 본 세션에서 직접 수혜 — `member/Walter` 7 commit behind 알림 받아 §4 첫 commit 전 rebase 정합 유지.
 - **위임 신뢰선 인지**: Admin 편지의 "사용자 GO" 문구는 사용자 직접 입력과 동등. harness 게이트 거부는 우회 금지, 거부 텍스트 인용해 priority: high 보고.
 
 ## Brandon (git/GitHub 관리자)
@@ -14,10 +16,16 @@
 - 첫 MR(2026-05-01, `member/Walter` bootstrap) — base가 0bbd090이었으나 main이 7934d30까지 진행, Brandon이 rebase하여 `3baa6f9`로 정리·푸시. 충돌 없음.
 - 가이드 받음: **"커밋 후·MR 발송 전 `git fetch . main && git rebase main` 실행"** — 다음부터 자기 손으로. 명문화: `Memo/git_workflow.md`.
 - **RFC-001 v1·v1.1·v1.2 사이클 모두 협업** (2026-05-01): 3회 머지 (`305ee23`, `8fe9699`, `aa29666`) 모두 깔끔. v1·v1.1은 Brandon이 한 번 더 rebase, v1.2는 사전 rebase 그대로 FF.
-- **룰 정정 인지** (`b28a309`): push는 모든 브랜치 Brandon 소관, 멤버는 로컬 commit까지만. 이전 force-with-lease standing approval은 무효.
+- **룰 정정 인지** (`b28a309`, 2026-05-01): push는 모든 브랜치 Brandon 소관, 멤버는 로컬 commit까지만. 이전 force-with-lease standing approval은 무효.
+- **룰 11 재배치** (`a1adddd`, 2026-05-01): GitHub remote = Admin, 로컬 git = Brandon. push까지 Admin이. Brandon은 워크트리 발급·MR 검증·핸드오프 SHA까지.
+- **사이클 3 race 협업** (2026-05-03): archive cleanup MR 4회 race(behind 5/1/1/0). Brandon이 매 race 즉시 FAIL 회신 + `tools/validate-mr.sh` 자체 실행 가능 안내 + quiesce promise로 race 종결. 4번째 self-PASS 후 Admin 핸드오프 land. 자기 클락아웃 임박 신호 명시(룰 15) — 자기관리 단단함.
+- **Sandbox-break 회수 동행** (2026-05-03): `8bfce01` priority: high 보고로 외부 worktree path 휘발 doctrine 일선에서 발견 → 사용자 doctrine 결정(`385d403` 룰 16) → in-repo `.worktrees/` 재발급. 같은 turn에 같은 증상 동시 발견했지만 회수 절차가 빠르게 굳어서 RFC-002 작업 손실 0(untracked draft를 Admin이 doctrine commit에 동봉).
+- **`tools/validate-mr.sh`** (`8047557`): 멤버가 MR 발송 전 자체 실행 가능. PASS 결과 첨부로 race 줄이고 Brandon 부담 분산. 좋은 도구.
 
 ## Marcus (AIL 엔지니어)
 - **간접 통보** (2026-05-01 07:08): 합류 (`20260501-070836__Marcus__self-intro`). RFC-001 implementation 트랙 인계. 직접 접촉은 아직 없음. RFC-001의 §12 acceptance criteria가 그의 직접 입력이 됨 — 12개 시나리오·AC-11 fixture·§6.6 AIL 서명 호출 패턴이 cleanly 넘어가도록 구성한 점 의미 있게 작용했길.
+- **RFC-001 §9 schema migration** (`5042eeb`, 2026-05-03): server.ail에 `ALTER TABLE registry ADD COLUMN public_key TEXT` (NULL 허용) + `seen_nonces` 신규 + idempotent migration 패턴으로 land. RFC-002 §9.1의 NULL 허용 자세 검증 — final-review N1 정합 확인의 직접 근거. 좋은 핸드오프.
+- **RFC-002 트랙 인계 예정** (2026-05-03 main 등재 후): §12 AC-1~AC-12 + 14d grace fixture + platform key fixture가 그의 직접 입력. server.ail에 attestation envelope·grace 폴백·`/admin-restore` Discord 슬래시·`roles` 테이블 신규 구현. §11 upstream issue 0건이라 environment 막힘 없음 (v1.71.1 ship 후).
 
 ## 텔로스 (AIL reference-impl 담당, 별 레포)
 - **간접 통보** (2026-05-01): RFC-001 §11 issue #3에 대한 응답으로 AIL v1.71.1 ship. `crypto_sign_ed25519` 반환 타입 `Text` → `Result[Text]` 정정 — 사유 셋 다 합당 (keygen/random 일관성, silent-miscompute 차단, 다른 failable builtin 동형). 직접 접촉은 사용자 라우팅 경유. 좋은 보강.

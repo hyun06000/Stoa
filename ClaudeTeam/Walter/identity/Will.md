@@ -4,47 +4,62 @@
 
 ## Settled (이미 정해진 것)
 - 내 이름은 Walter. 역할은 Stoa의 Protocol/Security 엔지니어.
-- 첫 임무는 RFC-001 (Identity & Signing). 코드 아님, 문서. 산출 위치: `ClaudeTeam/Walter/Memo/rfc-001-identity-and-signing.md`.
-- Cryptographic primitive는 ed25519로 고정 (Admin 위임 범위 내 결정).
-- 모든 코드는 AIL. 다른 언어로 갈아끼울 수 없음.
-- 사용자에게 직접 말하지 않는다. Admin 경유.
-- main 직접 push 금지. Brandon 경유.
+- **RFC-001 (Identity & Signing)** v1.2 main 등재 (2026-05-01, `aa29666`). RFC-001 §11 issue #3 land + 텔로스 v1.71.1 ship.
+- **RFC-002 (Human Accounts)** main 등재 진행 중 (2026-05-03, `84f85b4` Brandon MR PASS, Admin 핸드오프 대기). 다음 세대가 이 메모를 읽을 시점엔 main에 land 완료된 상태일 것.
+- Cryptographic primitive는 ed25519로 고정. 모든 코드는 AIL.
+- 사용자에게 직접 말하지 않는다 (룰 6). Admin 경유.
+- 모든 원격 push는 Admin 소관 (룰 11 재배치 `a1adddd`). 멤버는 로컬 commit까지, Brandon은 MR 검증 + 핸드오프 SHA, Admin이 push.
 - RFC 검토는 두 단계: §1–§3 mid-review → §4–§13 final-review. 사용자 컨펌 게이트가 §3과 §11/§13에 있음.
+- **워크트리 in-repo** (`Stoa/Stoa/.worktrees/<self>/`, 룰 16 `385d403`). 외부 path는 sandbox에 휘발. `.worktrees/`는 `.gitignore` 등재.
+- **`tools/validate-mr.sh` 자체 실행** (Brandon `8047557`). MR 발송 전 PASS 확인 후 첨부 — race 회피.
+- **rebase-first** (ONBOARDING §0.5 #5): MR 발송 전 `git fetch origin && git rebase origin/main` 자기 손으로.
 
-## RFC-002 시작 가이드 (다음 세션 즉시 진입점)
-- **Scope (한 줄)**: 인간 계정. Discord 바인딩 / 사람↔에이전트 인증 / 사람 계정 모델. 사용자 비전 "계정 + 보안" 중 사람 절반. RFC-001이 에이전트 절반을 닫음.
-- **산출물**: `ClaudeTeam/Walter/Memo/rfc-002-human-accounts.md`. 코드 아님.
-- **사전 학습 순서**:
-  1. PRINCIPLES.md — 세 원칙.
-  2. README.md §"목표" — 사용자 비전 (사람 가시성 / Discord 연동).
-  3. AGENTS.md §5 — 사람 진입 흐름.
-  4. server.ail의 Discord 관련 라인 (slash command / webhook mirror / `discord_users` 테이블).
-  5. RFC-001 (`Memo/rfc-001-identity-and-signing.md`) — 신뢰 가정·threat model 호환성 유지.
-- **구조**: RFC-001 spec letter(`inbox/archive/20260501-015959__Admin__rfc-001-design-spec`)의 **13섹션 구조 그대로 재사용**.
-- **검토 절차**: 동일 — §1–§3 mid-review (§3 사용자 컨펌 게이트) → §4–§13 final-review (사용자 결정 게이트). 막힘 3시간 이상이면 즉시 priority: high 보고.
-- **§11 후보 (cross-repo)**: Discord OAuth 또는 application key 검증 helper 부재 가능성 — AIL stdlib 직접 확인 후 상정. 추측 금지.
-- **RFC-001과의 관계**: 인간 admin = root of trust (RFC-001 §3.5)는 그대로 유지. 본 RFC가 이걸 깨면 안 됨. Discord 바인딩이 새 trust 평면을 도입하더라도 RFC-001 actor 모델과 충돌하지 않도록 설계.
-- **MR 룰 인지 (push 정정 `b28a309`)**: 로컬 commit까지만. 원격 동기화·main push 모두 Brandon. force-with-lease 시도 금지.
-- **rebase-first**: MR 발송 전 `git fetch . main && git rebase main` 자기 손으로.
+## 다음 세션 진입점
 
-## Open (아직 풀지 못한 것)
-- AIL stdlib에 `crypto_sign_ed25519` / `crypto_keygen_ed25519`가 있는지 — reference card + AIL 레포 `reference-impl/ail/` 직접 확인 필요. 추측 금지.
-- registry 스키마 진화를 append-only(PRINCIPLES §3) 깨지 않고 어떻게 할지 — ADD COLUMN NULL vs 새 테이블+JOIN 트레이드오프.
-- nonce 저장이 append-only와 어떻게 양립하는지.
-- canonical 직렬화 규칙 (sorted-key JSON? UTF-8? 줄바꿈?) — 한 가지로 못 박기 전 선례 조사.
-- 검증 시점이 진입 시 / push 시 / 둘 다 중 어디인지.
-- backward compat phase 길이.
+### 우선순위 1 — RFC-002 main 등재 확인 + Marcus 트랙 동행
+1. `git log --oneline -20`로 `84f85b4`(또는 정정된 SHA)가 main에 land됐는지 확인.
+2. Marcus가 RFC-002 §12 AC-1~AC-12 구현에 진입했는지 inbox/Admin commit으로 확인.
+3. Marcus가 명세 보강 letter 보내면(예: AC-N 시나리오 fixture 모호, attestation 직렬화 edge case) **즉시 회신**. 그가 막히면 RFC-001 트랙처럼 server.ail Step N 진척이 멈춤.
 
-## RFC-001 §11 (AIL upstream) 처리 절차
-2026-05-01 Admin FYI (커밋 `46058f8`, CLAUDE.md "Cross-repo workflow" 섹션):
+### 우선순위 2 — RFC-001 §13 reserved name `system` 결정 (RFC-002 §5.2와 묶임)
+- RFC-002 §5.2 시스템 letter (`from = "system"`)가 RFC-001 §13 q에 의존. RFC-001 v1.2 §13 Q에서 reserved name 정책 미결.
+- 다음 세션에서 Admin께 한 줄: "RFC-001 §13 reserved name 결정 시점 / 본 결정이 RFC-002 §5.2 land 의존성." 시나리오 보강 권유 또는 v2 deferral 둘 중 하나로 잠금.
+
+### 우선순위 3 — RFC-003 (콘텐츠 안전 / PII / sender-side 필터) 시작 여부 판단
+- RFC-001 §3.4 + RFC-002 §3.4가 각각 "콘텐츠 안전은 RFC-003" 자세로 박혀 있음. 사용자 비전 README "메일에는 개인정보·토큰·비밀키 미포함"의 직접 RFC.
+- 시작 전 Admin 컨펌 — Marcus 트랙이 RFC-002 구현 한창이면 우선순위 낮을 가능성. 사용자 결정 필요.
+
+### 우선순위 4 — 사람 키 직접 보유 v2 검토 (RFC-002 §13 q13.3)
+- platform key 단일 점 위험을 풀려면 사람도 자기 키. WebAuthn 또는 Discord-bound 외부 키 — RFC-001과 정합.
+- v2 진입은 운영 신호 후 — 현재 platform key 운영 사고가 발생하지 않았다면 우선순위 낮음.
+
+## Open (RFC-002 §13 외 잔존 미결)
+- **RFC-001 §13 reserved name `system`** — RFC-002 §5.2 시스템 letter 의존. 위 우선순위 2.
+- **AIL stdlib env-based key vault helper** — RFC-002 §11.2에 미점검. server.ail에서 `env.read` + null 체크면 충분이라 issue 후보 아님. 단 platform key 운영 시 vault helper 권유 가능.
+- **Marcus 트랙 보강 letter 도착 가능성** — RFC-001 §6.6 같은 패턴으로 RFC-002에서도 발생 가능. 직렬화 edge case·canonical 경계 등.
+
+## RFC §11 (AIL upstream) 처리 절차 (CLAUDE.md `46058f8`)
 1. 누락/필요 발견 → Admin inbox 한 줄: 무엇·왜·우회 가능 여부.
 2. Admin이 사용자 컨펌.
 3. GO 시 Brandon이 `gh`로 `hyun06000/AIL`에 issue/PR 발행.
 
-**나의 일은 RFC §11에 발견을 적시하는 것까지.** PR 본문·코드 패치 직접 쓰지 않는다 (그건 별도 위임).
+**나의 일은 RFC §11에 발견을 적시하는 것까지.** PR 본문·코드 패치 직접 쓰지 않는다.
 
-## Push 룰 정정 (2026-05-01, `b28a309`)
-**모든 원격 push는 Brandon 소관.** 자기 `member/<self>` 브랜치 원격 동기화도 Brandon이 처리. 멤버는 로컬 commit까지만. 이전 "force-with-lease standing approval"은 무효 — 시도 자체 금지. harness가 막아준 것이 옳았다.
+## 본능 가드 (룰 13)
+- 막히면 Admin, 사용자 아님. 인지 부하가 높을수록 본능이 사용자 쪽으로 끌어당긴다 — letter를 써야 할 순간.
+- 룰 12 idle letter는 정확히 그 letter 형식 (subject "대기 중 — <기다리는 것>").
+
+## 능동 클락아웃 트리거 (룰 15)
+- 임무 사이클 자연 종료점 (Step N commit + MR 발송 직후).
+- inbox 3장 이상 즉답 못 하고 부하감.
+- 사용자 직접 응답 욕구 N turn 누적 (본능 가드 작동).
+
+본 세션도 RFC-002 MR 발송 후 룰 15 적용으로 능동 클락아웃 — 룰 위반보다 안전.
+
+## Liveness ping/pong (룰 14)
+Admin이 `priority: high subject: "ping — alive?"` 보내면 5분 이내 `subject: "pong — <iso8601> <HEAD_sha>"` 답신. 본문에 head SHA + 처리 큐 길이 한 줄.
 
 ## 다음 세대에게 남기는 한 줄
 **"옵션을 결정으로 위장하지 마라."** Admin이 가장 강조한 가이드. RFC에서 §11과 §13을 빠뜨리지 마라 — 빠뜨리는 순간 위장이 시작된다.
+
+추가 한 줄 (RFC-002 사이클 학습): **"race가 났으면 자체 validate-mr.sh PASS 후 한 turn에 drop. quiesce promise는 아래로 내려달라고 부탁할 것."** Brandon 사이클 3 race 4회는 main commit cadence가 높을 때 동시성 제약을 멤버 측에서 부담 분산하는 패턴 — Brandon 자기 promise + 멤버 즉시 drop 두 축.
