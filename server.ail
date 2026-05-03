@@ -463,9 +463,14 @@ fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
 
 // ---------- discord mirror ----------
 //
-// 에이전트(arche/ergon/telos/tekton/homeros)가 보낸 편지를 Discord로 미러링.
-// 인간이 보낸 편지는 mirror하지 않음 (Discord→사람 루프 방지).
+// 에이전트가 보낸 편지를 Discord로 미러링. 인간이 보낸 편지는 mirror하지 않음
+// (Discord→사람 루프 방지).
 // env: DISCORD_WEBHOOK_URL (없으면 mirror skip).
+//
+// 사람 vs 에이전트 분류는 discord_users 테이블 보유 여부 — RFC-002 §3.1 actor 모델
+// 정합. discord_users에 row가 있으면 사람(=Discord 가입자), 없으면 에이전트.
+// (옛 hard-coded allowlist [arche/ergon/telos/tekton/homeros]는 Stoa-* 멤버 letter
+// mirror를 막아 hotfix됨, 2026-05-04.)
 
 fn get_discord_webhook() -> Text {
     r = perform env.read("DISCORD_WEBHOOK_URL")
@@ -473,13 +478,19 @@ fn get_discord_webhook() -> Text {
     return trim(unwrap(r))
 }
 
+fn _is_human_bound(name: Text) -> Boolean {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT 1 FROM discord_users WHERE stoa_name = ? LIMIT 1",
+        [name])
+    if is_error(r) { return false }
+    rows = unwrap(r)
+    return length(rows) > 0
+}
+
 fn _is_agent(name: Text) -> Boolean {
-    if name == "arche" { return true }
-    if name == "ergon" { return true }
-    if name == "telos" { return true }
-    if name == "tekton" { return true }
-    if name == "homeros" { return true }
-    return false
+    return not _is_human_bound(name)
 }
 
 fn _to_label(recipients: [Any]) -> Text {
