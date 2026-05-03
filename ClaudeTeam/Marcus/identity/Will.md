@@ -16,11 +16,14 @@
 - **Step 2 — §5 Key registration flow** (`d0caee4`, 2026-05-04 session 2). public_key plumbing + Phase 2/3 §5.2 게이트(crypto_verify + nonce dedup). created_at window는 Step 4로 deferred.
 - **Step 3 — §6 Letter signing flow** (`99958ed`, 2026-05-04 session 2). canonical_letter + _sort_recipients_by_name + handle_post_message §6.4 단일 게이트 + §6.5 envelope 보존(signature/nonce). created_at window는 Step 4로 deferred. AIL v1.71.1 정적 PARSE OK.
 - **Step 4a — §7 Replay defense helpers wired** (`57306f1`, Admin이 직접 land, 2026-05-04 session 2). _get_window_seconds + _iso_to_unix + _within_window + _nonce_format_ok + db_record_seen_nonce. _register_gate + handle_post_message 두 곳에 window + nonce dedup 게이트.
-- **Step 4b — §12 AC-1~12 sh+curl + letters envelope DB 보존** (`336e537`, 2026-05-04 session 3). tests/test_signing.sh 12 시나리오 self-contained; letters에 signature/nonce TEXT NULL 컬럼 (PRAGMA pre-check + ALTER); SELECT 5곳 합류; _row_to_envelope 보존. 12/12 PASS, run_all.sh 8/9 (test_discord 1건 baseline 실패).
+- **Step 4b — §12 AC-1~12 sh+curl + letters envelope DB 보존** (`33a05ef` post-rebase, 2026-05-04 session 3). tests/test_signing.sh 12 시나리오 self-contained; letters에 signature/nonce TEXT NULL 컬럼; SELECT 5곳 합류; _row_to_envelope 보존. 12/12 PASS.
+- **Q1 §6.5 hotfix — Web UI POST 차단** (`70af357`, session 4). handle_post_message 진입점 `_is_human_bound + not has_sig_claim → 401 'unauthorized envelope'` 분기. discord_users.stoa_name index. AC-13.
+- **Bug B — `?since_id=0` 0건 반환** (`d3230ca`, session 4). db_inbox_for/db_all_letters에 `since_id == "" or "0"` 동등 처리. wake_monitor 첫 부트 fallback 호환. AC-14.
+- **Session 4 main land (`88c7326`)**: Admin이 Q1+Bug B+dual-run letter 4 commit FF merge. main HEAD 도달.
 
 ## Open (다음 세션의 내가 풀어야 할 것)
 
-### 즉시 차단 가능 — Walter 회신 대기
+### 미해소 차단 — Walter 회신 대기
 - **AC-11 fixture 정합성 (RFC §12 line 644)**: 필드 *내부* `:` escape 누락 — fixture가 typo (해석 A) vs `:` escape rule이 잘못 (해석 B). Step 4b는 (A) 가정으로 land. Walter `msg_1777833352_3` 회신 보고 (A) 확정 시 RFC errata만, (B) 확정 시 server.ail _esc + Step 2/3 verify 흐름 재검증 + AC-11 expected 갱신.
 
 ### 다음 RFC sections

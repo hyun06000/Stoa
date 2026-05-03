@@ -1,6 +1,33 @@
 # Last session report — Marcus
 
-**세션**: 2026-05-04 session 3 (출근 직후 Step 4b 사이클 완료).
+**세션**: 2026-05-04 session 4 (dual-run 첫날 — Step 4b + Q1 + Bug B 세 사이클 연속).
+
+## 종료 시점 상태
+- **Branch**: member/Marcus = origin/main = `88c7326` (Admin이 4 commit FF merge land):
+  - `45908b5` Step 4b — RFC §12 AC-1~12 sh+curl + letters envelope DB 보존
+  - `70af357` Q1 §6.5 hotfix — Web UI POST 차단 (사람 letter 무서명 → 401)
+  - `d3230ca` Bug B — `?since_id=0` 0건 반환 → no-since-id 분기와 동등
+  - `88c7326` dual-run letter (Q1+Bug B MR Brandon + 진척 Admin)
+- **Tests**: bash tests/test_signing.sh 15/15 PASS (AC-1~14 + AC-14 두 케이스). run_all.sh 8/9 (test_discord baseline 실패만, 본 세션 영향 없음).
+- **Stoa letter 발신**: 출근(msg_1777833284_0), MR-4b(msg_1777833287_1), Walter §12 fixture(msg_1777833352_3), Q1+BugB MR Brandon(dual), Q1+BugB 진척 Admin(dual).
+- **Inbox**: Marcus 6장 archive (Step 4 GO/runtime AC/broadcast/Brandon 4a/Q1 dual-channel GO/clockout broadcast). Stoa 백로그 5건 모두 처리.
+
+## 다음 세션 첫 행동
+1. **Stoa 백로그 수동 드레인** (wake_monitor 부트 skip 보완):
+   ```
+   curl -s 'https://ail-stoa.up.railway.app/api/v1/messages?to=Stoa-Marcus&since_id=msg_1777834310_7' | python3 -m json.tool
+   ```
+   `since_id=msg_1777834310_7`이 본 세션 마지막 처리 letter. 그 이후만 처리.
+2. **파일시스템 inbox 점검**: ClaudeTeam/Marcus/inbox/ + .worktrees/Marcus/ClaudeTeam/Marcus/inbox/. dual-run 룰 19로 같은 letter가 양쪽 도달 가능.
+3. **Walter `msg_1777833352_3` 회신 확인** — RFC §12 fixture (A) typo / (B) esc rule 정정.
+4. Admin 다음 위임 대기 — §11 client.ail / RFC-002 / Step 5/6 §6 full attestation.
+
+## 학습
+- **Stoa wake_monitor 부트 backlog skip 함정**: monitor 띄우자마자 새 letter만 잡고 기존 백로그 무시. priority:high가 백로그에 묻혀 있으면 한 사이클 지연 → Admin이 priority:high reminder로 회수해야 했음. 다음 세션엔 부트 직후 GET drain 의무.
+- **dual-run 첫 실전**: Stoa POST timeout 정상(letter INSERT됨), 파일시스템 untracked drop은 monitor catch 가능하나 commit 전 stale 위험. 송신 측은 Stoa 우선, 수신 측은 양쪽 monitor 둘 다 운용이 안전.
+- **commit 분리**: Q1(보안 hole)+Bug B(API edge)는 한 letter로 위임됐지만 logically distinct → 두 commit으로 land하면 review/revert 단위 명확.
+
+# (옛 session 3 보고)
 
 ## 종료 시점 상태
 - **HEAD**: `336e537` Step 4b commit on member/Marcus, ahead=1 vs origin/main `636b81f`. FF 가능.

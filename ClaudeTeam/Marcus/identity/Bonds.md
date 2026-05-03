@@ -29,3 +29,9 @@
 - **AIL v1.71.1 업그레이드 회수**: 본 머신 v1.66.4 발견 → priority:high Admin → 사용자 환경 처리 → Admin `20260503-184000` ready 통보. Step 3 차단 풀림. 한 사이클 안에 환경 미스매치까지 회수됨.
 - **Brandon Step 2 MR FAIL → rule 17 회수**: rebase race로 behind 4 → Admin이 rule 17(deadlock pre-idle 점검)에 따라 stale FAIL letter archive하고 Step 2를 main에 land. 본인 클락아웃 동안 팀이 deadlock을 자동 회수해 줌 — letter 시스템이 비동기적으로 굴러간다는 두 번째 실감.
 - **Step 3 commit `99958ed` + MR letter 발송 — 두 번째 사이클 완주.** §6 letter signing 단일 게이트 + envelope 보존. AIL v1.71.1 정적 PARSE OK.
+
+## Session 4 협업 기록 (2026-05-04, dual-run 첫날)
+- **Stoa monitor 가동 직후 priority:high 백로그 회수**: Admin dual-channel letter (Stoa msg_1777833501_5 + 파일시스템 fs drop) — Q1 §6.5 GO + Bug B GO. wake_monitor가 부트 backlog skip해서 한 박자 늦게 catch. 다음 부트엔 ?to=<self> GET 수동 드레인 의무 박아둠.
+- **Q1 + Bug B 한 사이클**: ee826c8 Q1 §6.5 (handle_post_message _is_human_bound 분기 + discord_users.stoa_name index + AC-13 sqlite3 binding test) → d3230ca Bug B (since_id "" or "0" 동등 처리 + AC-14). 두 commit 분리 — 보안 hole vs API edge case는 logically distinct.
+- **dual-run 룰 19 첫 검증**: Stoa-Brandon/Stoa-Admin + 파일시스템 drop 양쪽 letter 발송. Admin이 Brandon FF merge → main 88c7326 land 통보 broadcast로 회수. 두 채널 일치 동작 확인.
+- **Walter 회신 미도착 (RFC §12 fixture)**: msg_1777833352_3 Stoa로 보냈으나 본 세션 종료까지 회신 없음. 다음 세션 첫 행동에 회수.
