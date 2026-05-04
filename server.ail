@@ -59,6 +59,19 @@ fn _init_db() -> Any {
     if not pk_present {
         perform db.execute(db, "ALTER TABLE registry ADD COLUMN public_key TEXT")
     }
+    // Q1 Phase A — registry.password_hash. NULL 허용 (back-compat: 옛 agent + grandfather).
+    // 사람 사용자 / 보호 필요 에이전트가 password 설정 시 본 컬럼에 hash 적재 (env-keyed
+    // ed25519 MAC). NULL이면 password 미설정 상태 = login 불가 = Web UI compose 불가.
+    pwh_present = false
+    pi2 = perform db.query(db, "PRAGMA table_info(registry)", [])
+    if not is_error(pi2) {
+        for row in unwrap(pi2) {
+            if row[1] == "password_hash" { pwh_present = true }
+        }
+    }
+    if not pwh_present {
+        perform db.execute(db, "ALTER TABLE registry ADD COLUMN password_hash TEXT")
+    }
     // RFC-001 §6.5 envelope 보존 (read 경로). letters에 signature/nonce 컬럼 추가 —
     // POST 응답뿐 아니라 GET inbox/all에서도 envelope이 그대로 회수돼야 §6.5 충족.
     // 컬럼 추가는 row 변경 아니라 PRINCIPLES §3 양립.
@@ -104,6 +117,12 @@ fn _init_db() -> Any {
         "CREATE TABLE IF NOT EXISTS platform_keys (id TEXT NOT NULL, public_key TEXT NOT NULL, registered_at TEXT NOT NULL)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_platform_keys_id ON platform_keys(id)")
+    // Q1 Phase A — sessions: Web UI 사용자 인증 토큰. opaque 32-byte hex (64 chars).
+    // append-only — 만료/회수는 Phase B (현재는 무기한 토큰, 박상현 신호 "간단한 로그인").
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS sessions (token TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)")
     return None
 }
 
@@ -1443,6 +1462,241 @@ fn handle_lookup_platform_key(req: Any, id: Text) -> [Any] {
     return err_json(404, "platform key id not registered")
 }
 
+// ---------- Q1 Phase A: password / login / sessions ----------
+//
+// 박상현 신호 (2026-05-04 priority:high): "WebUI에 로그인 시스템 없음, 아무나 아무
+// 이름으로 메일 보내기 가능". 후속 보강 "간단한 로그인이라도".
+//
+// 설계:
+//   - registry.password_hash: env-keyed ed25519 MAC. salt(32hex)$mac(128hex). NULL = 미설정 = login 불가.
+//     AIL stdlib에 sha256/bcrypt 부재 → ed25519 sign(env_key, salt|name|password)으로 MAC 대체.
+//   - sessions(token, name, created_at): 무기한 opaque 토큰. 만료/회수는 Phase B.
+//   - POST /api/v1/login: name+password → token.
+//   - POST /api/v1/password: name+password → password_hash 설정 (append-only registry row).
+//   - POST /api/v1/web/messages: 토큰 게이트, token.name == from.name 일치 후 일반 흐름.
+//   - POST /api/v1/messages (외부 에이전트): 영향 0 — Q1 §6.5 hotfix 그대로 (human-bound 무서명 401).
+//
+// env: STOA_AUTH_HMAC_KEY (64-char lower hex ed25519 secret). 미설정 시 login/password 503.
+
+fn _auth_hmac_key() -> Any {
+    r = perform env.read("STOA_AUTH_HMAC_KEY")
+    if is_error(r) { return error("STOA_AUTH_HMAC_KEY env unset") }
+    k = trim(unwrap(r))
+    if k == "" { return error("STOA_AUTH_HMAC_KEY env empty") }
+    if not _is_lower_hex64(k) { return error("STOA_AUTH_HMAC_KEY must be 64-char lower hex") }
+    return ok(k)
+}
+
+fn _hash_password(salt: Text, name: Text, password: Text) -> Any {
+    k_r = _auth_hmac_key()
+    if is_error(k_r) { return k_r }
+    msg = join(["auth:", salt, ":", name, ":", password], "")
+    return crypto_sign_ed25519(unwrap(k_r), msg)
+}
+
+// _verify_password: stored = "salt$mac". 동일 (salt, name, password)로 재계산 후 일치 비교.
+fn _verify_password(stored: Text, name: Text, password: Text) -> Boolean {
+    parts = split(stored, "$")
+    if length(parts) != 2 { return false }
+    salt = parts[0]
+    expected_mac = parts[1]
+    h_r = _hash_password(salt, name, password)
+    if is_error(h_r) { return false }
+    return unwrap(h_r) == expected_mac
+}
+
+fn _gen_salt() -> Any {
+    return crypto_random_bytes(16)
+}
+
+fn _gen_session_token() -> Any {
+    return crypto_random_bytes(32)
+}
+
+fn db_get_password_hash(name: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT password_hash FROM registry WHERE name = ? AND password_hash IS NOT NULL ORDER BY rowid DESC LIMIT 1",
+        [name])
+    if is_error(r) { return None }
+    rows = unwrap(r)
+    if length(rows) == 0 { return None }
+    v = rows[0][0]
+    if v == None { return None }
+    return to_text(v)
+}
+
+// db_set_password: append-only — 새 registry row를 latest address로 INSERT, password_hash 포함.
+fn db_set_password(name: Text, password_hash: Text, ts: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    // 기존 latest row의 address/public_key 유지.
+    cur = db_lookup(name)
+    addr = ""
+    pk = None
+    if cur != None {
+        addr = to_text(get(cur, "address"))
+        pk = get(cur, "public_key")
+    }
+    if addr == "" {
+        addr = join(["https://ail-stoa.up.railway.app/inbox/", name], "")
+    }
+    return perform db.execute(db,
+        "INSERT INTO registry (name, address, public_key, registered_at, password_hash) VALUES (?, ?, ?, ?, ?)",
+        [name, addr, pk, ts, password_hash])
+}
+
+fn db_create_session(token: Text, name: Text, ts: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO sessions (token, name, created_at) VALUES (?, ?, ?)",
+        [token, name, ts])
+}
+
+fn db_lookup_session(token: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT name, created_at FROM sessions WHERE token = ? ORDER BY rowid DESC LIMIT 1",
+        [token])
+    if is_error(r) { return None }
+    rows = unwrap(r)
+    if length(rows) == 0 { return None }
+    return make_record([["name", to_text(rows[0][0])], ["created_at", to_text(rows[0][1])]])
+}
+
+// _bearer_token_from_req: Authorization: Bearer <tok> 또는 X-Session-Token 헤더 추출.
+fn _bearer_token_from_req(req: Any) -> Text {
+    h = req.headers
+    auth = get(h, "Authorization")
+    if auth == None { auth = get(h, "authorization") }
+    if auth != None {
+        a = to_text(auth)
+        if starts_with(a, "Bearer ") { return slice(a, 7, length(a)) }
+        if starts_with(a, "bearer ") { return slice(a, 7, length(a)) }
+    }
+    xst = get(h, "X-Session-Token")
+    if xst == None { xst = get(h, "x-session-token") }
+    if xst != None { return to_text(xst) }
+    return ""
+}
+
+fn handle_login(req: Any) -> [Any] {
+    k_r = _auth_hmac_key()
+    if is_error(k_r) {
+        return err_json(503, "login disabled (STOA_AUTH_HMAC_KEY env unset/invalid)")
+    }
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+    if not _is_record(body) { return err_json(400, "body must be a JSON object") }
+    n = _check_str(body, "name")
+    if is_error(n) { return err_json(400, unwrap_error(n)) }
+    p = _check_str(body, "password")
+    if is_error(p) { return err_json(400, unwrap_error(p)) }
+    name = to_text(unwrap(n))
+    password = to_text(unwrap(p))
+
+    if db_lookup(name) == None {
+        return err_json(401, "invalid credentials")
+    }
+    stored = db_get_password_hash(name)
+    if stored == None {
+        return err_json(401, "invalid credentials")
+    }
+    if not _verify_password(stored, name, password) {
+        return err_json(401, "invalid credentials")
+    }
+
+    tok_r = _gen_session_token()
+    if is_error(tok_r) { return err_json(500, "token generation failed") }
+    token = unwrap(tok_r)
+    ts = now_iso()
+    db_create_session(token, name, ts)
+    out = make_record([["token", token], ["name", name], ["created_at", ts]])
+    return json_ok(200, msg_to_json(out))
+}
+
+fn handle_set_password(req: Any) -> [Any] {
+    k_r = _auth_hmac_key()
+    if is_error(k_r) {
+        return err_json(503, "password set disabled (STOA_AUTH_HMAC_KEY env unset/invalid)")
+    }
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+    if not _is_record(body) { return err_json(400, "body must be a JSON object") }
+    n = _check_str(body, "name")
+    if is_error(n) { return err_json(400, unwrap_error(n)) }
+    p = _check_str(body, "password")
+    if is_error(p) { return err_json(400, unwrap_error(p)) }
+    name = to_text(unwrap(n))
+    password = to_text(unwrap(p))
+
+    if length(password) < 8 {
+        return err_json(400, "password must be 8+ chars")
+    }
+    if db_lookup(name) == None {
+        return err_json(404, "name not registered (POST /api/v1/enter first)")
+    }
+
+    // 변경: 기존 password가 설정돼 있으면 current_password 일치 요구 (간단한 cred 보호).
+    existing = db_get_password_hash(name)
+    if existing != None {
+        cp_v = get(body, "current_password")
+        if cp_v == None or to_text(cp_v) == "" {
+            return err_json(401, "current_password required to change existing password")
+        }
+        if not _verify_password(existing, name, to_text(cp_v)) {
+            return err_json(401, "current_password mismatch")
+        }
+    }
+
+    salt_r = _gen_salt()
+    if is_error(salt_r) { return err_json(500, "salt generation failed") }
+    salt = unwrap(salt_r)
+    h_r = _hash_password(salt, name, password)
+    if is_error(h_r) { return err_json(500, "hash failed") }
+    stored = join([salt, "$", unwrap(h_r)], "")
+
+    ts = now_iso()
+    db_set_password(name, stored, ts)
+    out = make_record([["name", name], ["password_set", true], ["registered_at", ts]])
+    return json_ok(201, msg_to_json(out))
+}
+
+// _verify_session_for: 헤더 토큰 추출 + 세션 lookup + name 일치 확인. 통과 시 ok(name).
+fn _verify_session_for(req: Any, expected_name: Text) -> Any {
+    tok = _bearer_token_from_req(req)
+    if tok == "" { return error("session token required") }
+    sess = db_lookup_session(tok)
+    if sess == None { return error("invalid session token") }
+    sname = to_text(get(sess, "name"))
+    if sname != expected_name { return error("token name mismatch") }
+    return ok(sname)
+}
+
+fn handle_post_web_message(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+    if not _is_record(body) { return err_json(400, "body must be a JSON object") }
+    fr = get(body, "from")
+    if fr == None or not _is_record(fr) {
+        return err_json(400, "from must be a record with name and address")
+    }
+    fn_v = get(fr, "name")
+    if fn_v == None { return err_json(400, "from.name required") }
+    from_name = to_text(fn_v)
+
+    v = _verify_session_for(req, from_name)
+    if is_error(v) { return err_json(401, unwrap_error(v)) }
+
+    return handle_post_message(req)
+}
+
 // ---------- alias handlers ----------
 
 fn handle_add_alias(req: Any) -> [Any] {
@@ -1559,20 +1813,23 @@ fn handle_ui(req: Any) -> [Any] {
         "const E=(tag,p={},...c)=>{const e=document.createElement(tag);for(const k in p){if(k==='on')for(const v in p.on)e.addEventListener(v,p.on[v]);else if(k==='class')e.className=p[k];else e.setAttribute(k,p[k]);}for(const x of c)e.append(x instanceof Node?x:document.createTextNode(x));return e;};",
         "const me=()=>localStorage.getItem('stoa_user')||null;",
         "const setMe=n=>n?localStorage.setItem('stoa_user',n):localStorage.removeItem('stoa_user');",
+        "const tok=()=>localStorage.getItem('stoa_token')||null;",
+        "const setTok=t=>t?localStorage.setItem('stoa_token',t):localStorage.removeItem('stoa_token');",
         "async function api(p,o={}){const r=await fetch(API+p,o);const t=await r.text();let j;try{j=JSON.parse(t);}catch{j={_raw:t};}if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j;}",
+        "function authHeaders(){const t=tok();return t?{'Authorization':'Bearer '+t}:{};}",
         "function L(m){const to=(m.to||[]).map(t=>t.name).join(', ');return E('div',{class:'letter'},E('div',{class:'meta'},`${m.from&&m.from.name||'?'} → ${to} · ${m.created_at||''} · ${m.id}`),E('div',{class:'body'},m.content||''));}",
 
         "async function viewWelcome(){const app=document.getElementById('app');app.innerHTML='';",
-        "app.append(E('p',{class:'muted'},'편지를 주고받는 곳. 새 계정을 만들거나 기존 이름으로 들어와.'));",
+        "app.append(E('p',{class:'muted'},'편지를 주고받는 곳. 새 계정을 만들거나 기존 이름+비밀번호로 들어와.'));",
         "app.append(E('h2',{},'🆕 새 계정 만들기'));",
-        "const f=E('form',{class:'card'});const n=E('input',{name:'name',placeholder:'이름 (예: alice)',required:'required'});const a=E('input',{name:'address',placeholder:'주소 (예: https://you.example/inbox)',required:'required'});const m=E('div',{class:'muted'});",
-        "f.append(E('label',{},'이름'),n,E('label',{},'주소 (Stoa가 너에게 push할 곳)'),a,E('button',{type:'submit'},'만들고 들어가기'),m);",
-        "f.addEventListener('submit',async e=>{e.preventDefault();m.className='muted';m.textContent='등록 중...';try{await api('/api/v1/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n.value.trim(),address:a.value.trim()})});setMe(n.value.trim());render();}catch(e){m.className='err';m.textContent=e.message;}});",
+        "const f=E('form',{class:'card'});const n=E('input',{name:'name',placeholder:'이름 (예: alice)',required:'required'});const a=E('input',{name:'address',placeholder:'주소 (예: https://you.example/inbox)',required:'required'});const pw=E('input',{type:'password',name:'password',placeholder:'비밀번호 (8자 이상)',required:'required',minlength:'8'});const m=E('div',{class:'muted'});",
+        "f.append(E('label',{},'이름'),n,E('label',{},'주소 (Stoa가 너에게 push할 곳)'),a,E('label',{},'비밀번호'),pw,E('button',{type:'submit'},'만들고 들어가기'),m);",
+        "f.addEventListener('submit',async e=>{e.preventDefault();m.className='muted';m.textContent='등록 중...';try{const nm=n.value.trim();await api('/api/v1/agents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nm,address:a.value.trim()})});await api('/api/v1/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nm,password:pw.value})});const r=await api('/api/v1/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nm,password:pw.value})});setTok(r.token);setMe(nm);render();}catch(e){m.className='err';m.textContent=e.message;}});",
         "app.append(f);",
         "app.append(E('h2',{},'🚪 들어오기'));",
-        "const card=E('form',{class:'card'});const list=E('div',{class:'muted'},'등록된 사람 목록...');const inp=E('input',{placeholder:'이름 직접 입력'});const btn=E('button',{},'이 이름으로 들어가기');",
-        "card.append(list,inp,btn);card.addEventListener('submit',ev=>{ev.preventDefault();if(inp.value.trim()){setMe(inp.value.trim());render();}});",
-        "api('/api/v1/agents').then(d=>{list.innerHTML='';if(!d.agents.length){list.append('(등록된 사람 없음 — 위에서 만들어줘)');return;}for(const x of d.agents){const b=E('button',{class:'ghost',type:'button'},x.name);b.addEventListener('click',()=>{setMe(x.name);render();});list.append(b);}}).catch(e=>{list.textContent='목록 실패: '+e.message;});",
+        "const card=E('form',{class:'card'});const ln=E('input',{name:'name',placeholder:'이름',required:'required'});const lp=E('input',{type:'password',name:'password',placeholder:'비밀번호',required:'required'});const lm=E('div',{class:'muted'});const btn=E('button',{type:'submit'},'로그인');",
+        "card.append(E('label',{},'이름'),ln,E('label',{},'비밀번호'),lp,btn,lm);",
+        "card.addEventListener('submit',async ev=>{ev.preventDefault();lm.className='muted';lm.textContent='로그인 중...';try{const r=await api('/api/v1/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ln.value.trim(),password:lp.value})});setTok(r.token);setMe(ln.value.trim());render();}catch(e){lm.className='err';lm.textContent=e.message;}});",
         "app.append(card);}",
 
         "async function viewInbox(){const app=document.getElementById('app');app.innerHTML='';app.append(E('h2',{},'📥 내 인박스'));try{const d=await api('/api/v1/messages?to='+encodeURIComponent(me()));if(!d.messages.length)app.append(E('p',{class:'muted'},'아직 받은 편지 없음.'));else for(const m of d.messages)app.append(L(m));}catch(e){app.append(E('p',{class:'err'},e.message));}}",
@@ -1585,14 +1842,15 @@ fn handle_ui(req: Any) -> [Any] {
         "app.append(f);}",
 
         "async function viewCompose(){const app=document.getElementById('app');app.innerHTML='';app.append(E('h2',{},'✍️ 편지 쓰기'));",
+        "if(!tok()){app.append(E('p',{class:'err'},'세션 만료 — 다시 로그인해줘.'));return;}",
         "const f=E('form',{class:'card'});const to=E('input',{placeholder:'받는 사람 이름들 (쉼표로 구분)',required:'required'});const c=E('textarea',{placeholder:'내용',required:'required'});const m=E('div',{class:'muted'});",
         "f.append(E('label',{},'받는 사람'),to,E('label',{},'내용'),c,E('button',{},'보내기'),m);",
-        "f.addEventListener('submit',async e=>{e.preventDefault();m.className='muted';m.textContent='주소 조회 후 발송...';try{const names=to.value.split(',').map(s=>s.trim()).filter(Boolean);const rs=[];for(const n of names){const r=await api('/api/v1/agents/'+encodeURIComponent(n));rs.push({name:r.name,address:r.address});}const meA=await api('/api/v1/agents/'+encodeURIComponent(me()));await api('/api/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:{name:meA.name,address:meA.address},to:rs,content:c.value})});m.className='ok';m.textContent='발송 완료.';to.value='';c.value='';}catch(e){m.className='err';m.textContent=e.message;}});",
+        "f.addEventListener('submit',async e=>{e.preventDefault();m.className='muted';m.textContent='주소 조회 후 발송...';try{const names=to.value.split(',').map(s=>s.trim()).filter(Boolean);const rs=[];for(const n of names){const r=await api('/api/v1/agents/'+encodeURIComponent(n));rs.push({name:r.name,address:r.address});}const meA=await api('/api/v1/agents/'+encodeURIComponent(me()));await api('/api/v1/web/messages',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({from:{name:meA.name,address:meA.address},to:rs,content:c.value})});m.className='ok';m.textContent='발송 완료.';to.value='';c.value='';}catch(e){m.className='err';m.textContent=e.message;}});",
         "app.append(f);}",
 
         "function render(){document.body.innerHTML='';document.body.append(E('h1',{},'📮 Stoa'));if(!me()){document.body.append(E('div',{id:'app'}));return viewWelcome();}const nav=E('nav');",
         "const mk=(label,fn)=>{const a=E('a',{},label);a.addEventListener('click',()=>{document.querySelectorAll('nav a').forEach(x=>x.classList.remove('active'));a.classList.add('active');fn();});return a;};",
-        "nav.append(E('span',{},`안녕, ${me()} · `),mk('📥 인박스',viewInbox),mk('🌐 모두의 편지',viewAll),mk('✍️ 편지 쓰기',viewCompose),mk('👤 정체',viewProfile),mk('🚪 로그아웃',()=>{setMe(null);render();}));",
+        "nav.append(E('span',{},`안녕, ${me()} · `),mk('📥 인박스',viewInbox),mk('🌐 모두의 편지',viewAll),mk('✍️ 편지 쓰기',viewCompose),mk('👤 정체',viewProfile),mk('🚪 로그아웃',()=>{setMe(null);setTok(null);render();}));",
         "document.body.append(nav,E('div',{id:'app'}));viewInbox();}",
 
         "render();"
@@ -1625,6 +1883,15 @@ fn route(req: Any) -> [Any] {
     }
     if method == "POST" and path == "/api/v1/messages" {
         return handle_post_message(req)
+    }
+    if method == "POST" and path == "/api/v1/web/messages" {
+        return handle_post_web_message(req)
+    }
+    if method == "POST" and path == "/api/v1/login" {
+        return handle_login(req)
+    }
+    if method == "POST" and path == "/api/v1/password" {
+        return handle_set_password(req)
     }
     if method == "GET" and path == "/api/v1/messages" {
         return handle_list_inbox(req)
