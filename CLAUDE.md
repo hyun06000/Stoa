@@ -57,6 +57,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **letter 형식**: `to: [{"name":"박상현"}]`, `subject: "결정 요청 — <한 줄>"`, content에 옵션·권고·정합 영향. `priority: high` (블로킹) 또는 `normal` (참고).
     - **이유**: (1) Discord mirror로 사용자 외부 채널에 자동 사본 도달 — 채팅 세션 닫혀도 회수 가능. (2) 결정 큐의 auditable trail. (3) 사용자가 production Stoa 사용자로서 dogfood 사이클에 자연 합류. (4) 동시에 진행되는 다른 프로젝트(여러 Admin)의 결정 요청을 한 받은편지에서 비교 가능.
     - **응답 채널**: 사용자는 채팅(1차) 또는 Discord reply(2차) 어느 쪽으로 회신해도 됨. Stoa monitor가 박상현→Stoa-Admin reply를 catch.
+21. **자기 사이클 종료 (특히 MR 발송) 직후 idle letter 의무.** 멤버는 자기 임무 한 사이클을 끝낸 turn(예: MR 발송, 패치 commit + 핸드오프, 명세 land 등) **마지막에** Admin inbox로 idle letter 한 줄을 박는다 — Stoa + 파일시스템 dual.
+
+    ```
+    subject: "대기 중 — <기다리는 것>"
+    작업: <지금까지 진척 한 줄>.
+    대기: <다음 위임·검증 결과·외부 응답 등>.
+    재활성화 조건: <도착 letter / ping / 새 priority:high 등>.
+    ```
+
+    *(이유: 2026-05-04 Marcus 메일 누락 패턴 분석. MR 발송 turn 종료 시 하니스가 자연 quiet 상태로 들어가는데 idle letter 안 박으면 Admin이 \"alive·코드 작업 중·사망\" 셋을 구별 못 함 → 룰 14 ping/pong 의존 빈도↑. MR 발송 turn 자체에 idle letter 같이 박으면 한 turn 비용으로 다음 위임 도착 전까지 명시적 신호 유지. 룰 12 \"대기 진입 직전 알림\"의 강한 형태 — \"대기 진입 직후\"가 아니라 \"임무 사이클 종료 turn 안에서\".)*
+22. **wake_monitor 첫 부트 backlog auto-drain.** [`community-tools/stoa_wake_monitor.sh`](community-tools/stoa_wake_monitor.sh)는 SINCE_FILE 부재 시 since_id 빈값으로 첫 폴링 → 전체 backlog 한 번에 emit. 멤버 첫 부트 시 사이 letter 누락 0. *(2026-05-04 Marcus Bug A 회수 + 이번 사이클 Marcus 메일 누락 분석으로 land. 옛 doctrine \"부트 시점 since=max(latest)로 advance, 백로그는 수동 드레인\"은 폐기 — 자동 drain이 멤버 인지 부하 제거.)*
+23. **단일 멤버 부하 가중 시 증설/분담 플래닝 의무.** Admin은 다음 신호 중 하나라도 감지하면 즉시 박상현 결정 letter (룰 20) 발행해 (a) 멤버 증설 / (b) 업무 분담 / (c) 스코프 deferral 옵션 제시 + 권고:
+
+    - 한 멤버가 **2 사이클 연속** priority:high 단독 처리.
+    - 한 멤버 **MR 큐에 3건 이상** 미처리 적재.
+    - 룰 14 **ping/pong 발동 빈도가 한 멤버에 집중**.
+    - 사용자 결정 큐에 **단일 멤버 트랙 작업이 70% 이상** 점유.
+    - 단일 멤버 사이클 시간이 **다른 멤버 평균의 2배 이상** (heavy turn buffer 신호).
+
+    옵션:
+    - **(a) 증설**: 신규 멤버 영입 (예: 두 번째 AIL 엔지니어, Rachel QA·CI 등). 사용자만 spawn.
+    - **(b) 분담**: 기존 멤버 트랙 일부 이전 (예: Walter가 자기 RFC 명세 일부 구현까지). 룰 10 정합 — "모든 코드는 AIL"은 *언어* 룰이지 *멤버* 룰이 아님, 다른 멤버 AIL 코드 작성 가능.
+    - **(c) 스코프 deferral**: 비-블로킹 트랙(§13 reserved name, RFC-003 등)을 다음 사이클로 미뤄 현 부하 멤버 priority:high 트랙에 자원 집중.
+
+    권고 1순위는 부하 신호의 *지속성*에 따라: 단발 → (c). 2~3 사이클 누적 → (b)/(a). 구조적(한 멤버 핵심 자산 단독 보유) → (a) + 인수인계 사이클.
+
+    *(이유: 2026-05-04 Marcus가 한 사이클에 priority:high 4건(Q1·Bug B·issue#1·issue#2) + Step 4b·Step 5 + 후속 attestation까지 단독 처리 → 메일 누락 패턴 발생. 룰 22 (a) idle letter / (b) wake_monitor patch는 *증상* 처리, 부하 자체는 분담/증설로만 해소. 사용자가 "한 팀원 부하 가중 시 증설/분담 플래닝" 명시 발화로 land.)*
+
+## Stoa 단일 채널 컷오버 계획 (룰 19 후속)
+
+룰 19 dual-run은 검증 기간 임시 doctrine. 컷오버 조건:
+
+- **issue#1** simplified-body 500 hotfix land (`ba36a41`) ✓
+- **issue#2** push_to_recipients timeout hotfix land — Marcus 작업 중 (priority:high)
+- **issue#2 hotfix land 직후** Stoa 단일 채널 컷오버 land. 룰 19 텍스트 갱신 + 파일시스템 letter 발송 폐기.
+
+폐기 방식: 룰 19 본문에 \"검증 완료 (`<commit>`)로 dual-run 종료, Stoa 단일 채널\" 갱신. 파일시스템 inbox 디렉터리는 historical record로 보존 (신규 letter drop 안 함). identity/Memo는 파일시스템 유지 (자기 기록).
+
+대기·재방향 신호: issue#2 land 시 Admin이 컷오버 commit 발행 + 박상현 알림.
 
 ## Cross-repo workflow (upstream 기여)
 

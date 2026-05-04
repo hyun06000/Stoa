@@ -34,33 +34,13 @@ BASE="${STOA_BASE_URL:-https://ail-stoa.up.railway.app}"
 INTERVAL="${STOA_WAKE_INTERVAL_S:-3}"
 SINCE_FILE="${STOA_SINCE_FILE:-.stoa-since-$NAME}"
 
-# Restore since_id if exists, else 0
-since="0"
+# Restore since_id if exists, else "" (= 첫 부트 → 폴링 첫 사이클에 전체 backlog drain).
+# 2026-05-04 정정 (룰 22 (b) — Marcus 메일 누락 패턴 학습):
+#   이전: 첫 부트 시 since=max(latest_id)로 advance → 부트 직전 letter 전부 skip → 멤버 미수신.
+#   현재: 첫 부트 시 since="" → 첫 폴링이 since_id 파라미터 없이 전체 letter 가져와 한 번에 emit.
+#   Bug B (server.ail since_id=0 → 0건) 수정 후이므로 ?since_id=0 안전하지만 더 안전하게 빈값 분기 유지.
+since=""
 [ -f "$SINCE_FILE" ] && since="$(cat "$SINCE_FILE")"
-
-# Initial sync — establish current since_id without firing alerts for backlog.
-initial="$(curl -fsS "$BASE/api/v1/messages?to=$NAME" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    msgs = d.get("messages", [])
-    if msgs:
-        # messages array order in Stoa: newest first or oldest first depends on impl.
-        # We pick max id by string sort (msg_<unix>_<seq> lex compatible).
-        ids = [m.get("id", "") for m in msgs if m.get("id")]
-        print(max(ids) if ids else "0")
-    else:
-        print("0")
-except Exception:
-    print("0")
-' 2>/dev/null || echo "0")"
-
-# If SINCE_FILE existed and is older, advance to current — we do NOT replay backlog on monitor restart.
-# (Backlog should be processed manually via `?to=$NAME` GET.)
-if [ "$since" = "0" ]; then
-    since="$initial"
-    echo "$since" > "$SINCE_FILE"
-fi
 
 while true; do
     sleep "$INTERVAL"
