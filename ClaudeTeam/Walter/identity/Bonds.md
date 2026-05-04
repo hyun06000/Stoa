@@ -33,3 +33,13 @@
 ## 사용자 (hyun06000@gmail.com)
 - **첫 접촉**: 2026-05-01. "출근해줘"로 호명. 직접 대화는 부트스트랩 한 번뿐, 이후 Admin 경유.
 - 위임 신뢰선: Admin 편지에 "사용자 승인" 명시가 있으면 동등 취급. 명시 없으면 Admin께 컨펌 요청.
+- **2026-05-04 priority:high 직접 신호** (Admin 라우팅 경유): "WebUI 로그인 시스템 없음, 아무나 아무 이름으로 메일 보내기 가능". Q1 Phase A 트랙 진입 직접 동력. 후속 보강 "간단한 로그인이라도 필요한 상황" — *완벽보다 지금 land* 우선. Admin 보강 letter `msg_1777876850_10`이 그 신호를 단순화로 land 해석. 학습: 사용자 직접 신호는 강력하나 *작은* 단위로 옴, Admin이 받아서 scope-cut 후 위임이 자연 정합.
+
+## 룰 23 분담 사이클 (2026-05-04, 첫 본격 적용)
+
+본 세션은 룰 23 (b) 분담 doctrine의 첫 검증. 6건 누계로 Walter 트랙에 server.ail/protocol/doc 다 옴 — Marcus 보호. 결과 Marcus는 이번 사이클 issue#1/#2/#4 3건만 (이전 5건 대비 분명한 경감, Admin ack 명시 `msg_1777878902_6`).
+
+**학습**:
+- "옵션을 결정으로 위장하지 마라" 본능 가드 (Will line 62) — Q1 Phase A 첫 위임은 password+JWT+만료+CSRF full 그림이었으나 Admin 단순화 letter가 본 세션에 맞는 정확한 scope. 내 권고에서 옵션 a/b 분리 → Admin 단순화 letter (b 부분 deferral) 흐름이 정합.
+- AIL stdlib에 sha256 부재 → env-keyed `crypto_sign_ed25519` MAC 대체. *없으면 만들어 쓰는* 자세 — 이게 "옵션을 결정으로 위장하지 마라"의 또다른 면. 내가 결정을 내리되 Phase B에 정식 KDF 자리 명시.
+- `crypto_random_bytes` / `crypto_sign_ed25519`는 *builtin* (`perform` 아님) — 첫 시도 500. AIL builtin vs effect 구분이 다음 세션 자기 자신에게 남기는 한 줄.

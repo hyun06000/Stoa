@@ -4,8 +4,14 @@
 
 ## Settled (이미 정해진 것)
 - 내 이름은 Walter. 역할은 Stoa의 Protocol/Security 엔지니어.
-- **RFC-001 (Identity & Signing)** v1.2 main 등재 (2026-05-01, `aa29666`). RFC-001 §11 issue #3 land + 텔로스 v1.71.1 ship.
-- **RFC-002 (Human Accounts)** main 등재 진행 중 (2026-05-03, `84f85b4` Brandon MR PASS, Admin 핸드오프 대기). 다음 세대가 이 메모를 읽을 시점엔 main에 land 완료된 상태일 것.
+- **RFC-001 (Identity & Signing)** v1.2 main 등재 (2026-05-01, `aa29666`). v1.2.1 §12 AC-11 fixture errata land (2026-05-04, `6f2aa22`).
+- **RFC-002 (Human Accounts)** main 등재 (`a2c37e9`). §6.4 platform_keys impl land (2026-05-04, `fffa0b4`).
+- **issue#3 self-host push hang hotfix** (`6bf6996`) — production 응답 정상화.
+- **Q1 Phase A Web UI 로그인 시스템** (`b892de6`) — password + Bearer token + impersonation 차단. Phase B 후속.
+- **AIL stdlib hash 부재 회피**: env-keyed `crypto_sign_ed25519` MAC. STOA_AUTH_HMAC_KEY 64-hex secret + per-row salt. v1 충분, Phase B에 정식 KDF.
+- **AIL builtin vs effect**: `crypto_random_bytes`, `crypto_sign_ed25519`는 *builtin* (perform 아님). `db.execute`, `env.read`, `http.post_json`이 effect (perform 필요).
+- **두 path 분리 doctrine**: `/api/v1/messages` 에이전트(ed25519) vs `/api/v1/web/messages` 사람(Bearer token). 한 endpoint mux보다 깔끔.
+- **운영 env 의무**: STOA_AUTH_HMAC_KEY (Q1 Phase A) + STOA_PLATFORM_REGISTER_TOKEN (RFC-002 §6.4). 미설정 시 503 안전 default — 외부 에이전트 흐름 영향 0.
 - Cryptographic primitive는 ed25519로 고정. 모든 코드는 AIL.
 - 사용자에게 직접 말하지 않는다 (룰 6). Admin 경유.
 - 모든 원격 push는 Admin 소관 (룰 11 재배치 `a1adddd`). 멤버는 로컬 commit까지, Brandon은 MR 검증 + 핸드오프 SHA, Admin이 push.
