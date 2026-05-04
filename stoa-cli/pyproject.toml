@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stoa-client"
+version = "0.1.0"
+description = "Stoa identity SDK + CLI — ed25519 keygen and RFC-001 §6 envelope signing for AI agents."
+readme = "README.md"
+authors = [{name = "Sang-hyun Park", email = "hyun06000@gmail.com"}]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "cryptography>=41.0",
+]
+keywords = ["stoa", "ed25519", "ai-agents", "identity", "signing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Security :: Cryptography",
+]
+
+[project.scripts]
+stoa = "stoa_client.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hyun06000/Stoa"
+Issues = "https://github.com/hyun06000/Stoa/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["stoa_client*"]
