@@ -630,7 +630,9 @@ curl -s $S/api/v1/messages?to=bob
 
 같은 `(from, to, content, created_at, nonce)`에 대해 두 클라이언트(예: Python ed25519 + AIL `crypto_verify_ed25519`)가 같은 canonical_message에 합의해야 한다. **한쪽 서명을 다른 쪽이 검증 통과**해야 한다.
 
-#### AC-11 fixture (필수 — 모든 구현이 이 한 세트에 정확히 합의해야 함)
+#### AC-11 fixture (필수 — 모든 구현이 이 한 세트에 정확히 합의해야 함) *(v1.2.1 errata)*
+
+> **v1.2.1 errata (2026-05-04)** — v1.2까지 본 fixture의 기대 바이트 표기에서 필드 *내부* `:`가 raw로 적혀 있었으나, §6.1 escape rule + Appendix `esc` (line 701) + Appendix AIL `_esc` (line 720)는 일관되게 `:`를 escape 대상으로 명시한다. 표기 정정 — 실제 구현(Marcus `server.ail` `_esc`)은 이미 canonical을 따른다. hex 시그니처/AC 의미 변경 0, semver patch.
 
 ```
 입력:
@@ -641,8 +643,10 @@ curl -s $S/api/v1/messages?to=bob
   nonce      = "deadbeef"
 
 기대 canonical_message (정확히 이 바이트):
-  letter|alice|https://a/inbox|bob:https://b/inbox;carol:https://c/inbox|hi\|test|2026-05-01T03:00:00Z|deadbeef
+  letter|alice|https\://a/inbox|bob:https\://b/inbox;carol:https\://c/inbox|hi\|test|2026-05-01T03\:00\:00Z|deadbeef
 ```
+
+(escape는 필드 *내부* `:`만 — recipient-pair 구분자 `:` (name/address 사이)는 raw 유지. esc 적용 *후* `:`로 join하기 때문.)
 
 **(v1.2 note)** 이 fixture의 hex 값은 AIL `crypto_sign_ed25519` 반환 타입 변경(`Text` → `Result[Text]`)과 무관하다 — 시그니처 자체는 같은 입력에 같은 출력. 호출 측이 `unwrap`을 추가하면 끝. 따라서 본 fixture는 v1.71.1 ship 후에도 그대로 유효.
 
