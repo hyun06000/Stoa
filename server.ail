@@ -564,7 +564,11 @@ fn notify_discord(envelope: Any) -> Any {
     content = to_text(get(envelope, "content"))
     text = join(["📨 **", from_name, "** → ", to_label, "\n", content], "")
     payload = make_record([["content", text]])
-    perform http.post_json(url, payload, [], timeout: 3)
+    // issue#2 hotfix — Discord webhook 도달 불가/timeout이 핸들러 500 일으키지 않게.
+    attempt {
+        try perform http.post_json(url, payload, [], timeout: 3)
+        try None
+    }
     return None
 }
 
@@ -952,11 +956,19 @@ fn _envelope_to_discord(envelope: Any) -> Any {
     return make_record([["content", text]])
 }
 
+// _push_one: 수신자 listener로 envelope POST. issue#2 hotfix —
+// `perform http.post_json`이 timeout/connection-refused 등에서 effect 예외로
+// raise하면 caller 핸들러가 500 으로 죽음 (is_error는 Result error만 catch).
+// attempt+try는 perform 예외를 fallback으로 흡수해 Result-error로 변환 가능
+// (reference card: "attempt blocks CAN contain perform tries, enabling fallback
+// patterns"). 그 결과를 push_to_recipients의 is_error 분기가 정상 catch.
 fn _push_one(addr: Text, envelope: Any) -> Any {
-    if _is_discord_url(addr) {
-        return perform http.post_json(addr, _envelope_to_discord(envelope), [], timeout: 3)
+    payload = envelope
+    if _is_discord_url(addr) { payload = _envelope_to_discord(envelope) }
+    return attempt {
+        try perform http.post_json(addr, payload, [], timeout: 3)
+        try error("push failed: listener unreachable or timeout")
     }
-    return perform http.post_json(addr, envelope, [], timeout: 3)
 }
 
 fn push_to_recipients(recipients: [Any], envelope: Any) -> Any {
