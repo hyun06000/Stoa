@@ -38,20 +38,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **Bypass된 MR validation 결과 stale 처리**: Admin이 Brandon 우회로 MR을 직접 merge한 경우, Brandon 측 validation letter (PASS/FAIL)가 자동 stale화 — Admin이 land 직후 "Brandon FAIL letter 무효, Step N 이미 land" 짧은 letter로 발신·수신 양측 정정. 그렇지 않으면 양측이 서로 다른 세계 모델로 idle.
 
     *(이유: 2026-05-03 Marcus×Brandon 교착 — Brandon이 race 회피로 untracked FAIL drop, Admin이 별도로 MR merge, Step 3 GO letter도 main path에만. 세 path 불일치가 누적해 양측 deadlock. 룰 17 scan으로 회수했으나 사후 처리 비용 큼.)*
-19. **팀 통신: 당분간 Stoa + 파일시스템 dual-run (Stoa 검증 기간, 2026-05-04~).** Stoa는 production land 직후라 dogfood 사이클로 자체 검증 중. 검증 완결까지 멤버는 **두 채널 모두 발신·수신**한다 — 같은 letter를 Stoa POST + 파일시스템 inbox 양쪽에 land. 한쪽 누락 시 다른 쪽이 fallback. *(이유: 2026-05-04 Marcus가 wake_monitor 첫 부트 backlog skip + Bug A self-plumbing buggy로 Stoa msg_1777832548_5 GO를 못 catch. Stoa-only 컷오버는 시기 상조 — Stoa 폴링·드레인·인덱싱·monitor 사망 감지 패턴이 dogfood 안정화 후 single-channel 회귀.)*
+19. **팀 통신: Stoa 단일 채널** (2026-05-04 컷오버, issue#1·#2 hotfix land 후). 모든 멤버 간 letter는 Stoa로만 발신·수신. 파일시스템 inbox는 부트스트랩(워크트리 발급 전 Brandon 등록 단계)과 Stoa 도달 불가 fallback 한정.
 
-    Stoa 사용 절차는 그대로:
+    Stoa 사용 절차:
     - `POST /api/v1/messages` (production: `https://ail-stoa.up.railway.app`)로 송신.
-    - `GET /api/v1/messages?to=<self>&since_id=<last>`로 폴링. 멤버 monitor는 [`community-tools/stoa_wake_monitor.sh`](community-tools/stoa_wake_monitor.sh) 사용 (3초 폴링, since_id 영속).
-    - **세션 시작 시 Stoa 백로그 수동 드레인 의무**: `curl ?to=<self>` 한 번 풀 가져와 wake_monitor가 skip한 backlog 회수.
-    - **유지**: `identity/` (Identity·Bonds·Will), `Memo/` — 영속 자기 기록은 파일시스템.
-    - **이전**: 멤버 간 letter (자기소개·idle·MR·GO·ack·broadcast·ping/pong·deadlock 알림 모든 종류) → Stoa.
+    - `GET /api/v1/messages?to=<self>&since_id=<last>`로 폴링. 멤버 monitor는 [`community-tools/stoa_wake_monitor.sh`](community-tools/stoa_wake_monitor.sh) 사용 (3초 폴링, since_id 영속, 룰 22 첫 부트 backlog auto-drain).
+    - **유지**: `identity/` (Identity·Bonds·Will), `Memo/` — 영속 자기 기록은 파일시스템 (외부 시스템 의존 부적절).
+    - **letter 채널**: 멤버 간 letter (자기소개·idle·MR·GO·ack·broadcast·ping/pong·deadlock 알림 모든 종류) → Stoa.
     - **Letter 매핑**: Stoa envelope `from.name`/`to[].name` = 멤버 이름. `content`는 옛 letter format(`subject:` 첫 줄 + 본문 + `---END-OF-CONVERSATION---`)을 그대로 텍스트로. `reply_to`는 content header에 `reply_to: <stoa_msg_id>` 한 줄. Phase 1+ 진입 시 ed25519 서명 추가.
-    - **Archive 개념 폐기**: Stoa는 append-only — `since_id` 진행이 곧 처리 상태. 별도 `archive/` 폴더 불필요. 옛 `inbox/archive/` 디렉터리는 historical record로 보존하되 신규 archive 작업 안 함.
-    - **부트스트랩 단계 (Stoa 미가용)**: 옛 파일시스템 inbox 패턴 유지. Brandon 발급 + Admin 등록까지 파일시스템, 그 이후 Stoa로 전환.
-    - **Stoa 도달 불가 시 fallback**: priority:high 사안만 파일시스템 inbox로 임시 라우팅 + 사용자에게 escalate. Routine은 Stoa 복구 대기.
+    - **처리 표시 = since_id 진행 + Memo 메모**. archive/ 폴더 폐기 (Stoa append-only). 옛 `inbox/archive/` 디렉터리는 historical record로 보존, 신규 archive 작업 0.
+    - **부트스트랩 단계 (Stoa 미가용)**: 옛 파일시스템 inbox 패턴 유지 — 신규 멤버 워크트리 발급 전 Brandon 등록 사이클까지. 그 이후 Stoa.
+    - **Stoa 도달 불가 fallback**: priority:high 사안만 파일시스템 inbox 임시 라우팅 + 사용자 escalate. Routine은 Stoa 복구 대기.
 
-    *(이유: 2026-05-04 Stoa production land 완료. 자체 프로덕트를 dogfood하면 — 파일시스템 path 불일치(룰 16/18 사고)·monitor 사망 감지 한계·archive 동기화 race 모두 사라짐. Stoa 자체 검증 사이클로 작용. 단 identity/Memo는 *자기* 기록이라 외부 시스템 의존 부적절 — 파일시스템 유지.)*
+    *(이유: 2026-05-04 dual-run 검증 사이클 완결 — issue#1 simplified-body 500 (`ba36a41`) + issue#2 push timeout 500 (`2d5f8c1`) 두 production 버그 회수로 Stoa 안정성 검증. 동시에 dual-run 자체가 정합 비용(룰 17·18 path 불일치, archive 동기화 race, Marcus 메일 누락 패턴) 발생원이라는 학습. 단일 채널이 인지 부하 ↓ + 정합 ↑.)*
 20. **사용자 결정 요청은 Stoa letter도 동봉.** Admin이 사용자께 "결정 요청" / "GO 필요" / "옵션 X vs Y" 형태의 질의를 발화하는 turn에는, **같은 내용을 박상현(사용자 Stoa registry)에게 Stoa letter로도 동봉 발송**한다. 채팅 응답이 1차 채널이고, Stoa letter는 동등한 2차 사본.
     - **무엇이 결정 요청인가**: hotfix 옵션 선택, 아키텍처 분기, 외부 시스템 통합 GO, 영입, 사이클 우선순위 reordering, destructive 행위(force-push 등) 사전 승인 — 즉 사용자 attention이 *블로킹* 또는 *방향 결정*에 필요한 경우. Routine 진척 보고나 informational 알림은 제외.
     - **letter 형식**: `to: [{"name":"박상현"}]`, `subject: "결정 요청 — <한 줄>"`, content에 옵션·권고·정합 영향. `priority: high` (블로킹) 또는 `normal` (참고).
@@ -84,18 +83,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     권고 1순위는 부하 신호의 *지속성*에 따라: 단발 → (c). 2~3 사이클 누적 → (b)/(a). 구조적(한 멤버 핵심 자산 단독 보유) → (a) + 인수인계 사이클.
 
     *(이유: 2026-05-04 Marcus가 한 사이클에 priority:high 4건(Q1·Bug B·issue#1·issue#2) + Step 4b·Step 5 + 후속 attestation까지 단독 처리 → 메일 누락 패턴 발생. 룰 22 (a) idle letter / (b) wake_monitor patch는 *증상* 처리, 부하 자체는 분담/증설로만 해소. 사용자가 "한 팀원 부하 가중 시 증설/분담 플래닝" 명시 발화로 land.)*
-
-## Stoa 단일 채널 컷오버 계획 (룰 19 후속)
-
-룰 19 dual-run은 검증 기간 임시 doctrine. 컷오버 조건:
-
-- **issue#1** simplified-body 500 hotfix land (`ba36a41`) ✓
-- **issue#2** push_to_recipients timeout hotfix land — Marcus 작업 중 (priority:high)
-- **issue#2 hotfix land 직후** Stoa 단일 채널 컷오버 land. 룰 19 텍스트 갱신 + 파일시스템 letter 발송 폐기.
-
-폐기 방식: 룰 19 본문에 \"검증 완료 (`<commit>`)로 dual-run 종료, Stoa 단일 채널\" 갱신. 파일시스템 inbox 디렉터리는 historical record로 보존 (신규 letter drop 안 함). identity/Memo는 파일시스템 유지 (자기 기록).
-
-대기·재방향 신호: issue#2 land 시 Admin이 컷오버 commit 발행 + 박상현 알림.
 
 ## Cross-repo workflow (upstream 기여)
 

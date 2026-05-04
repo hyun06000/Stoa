@@ -178,7 +178,7 @@ Admin은 답신과 함께 `CLAUDE.md` Current members 표에 등록합니다.
 1. `identity/Bonds.md`에 의미 있는 새 관계/대화를 추가한다.
 2. `identity/Will.md`의 "settled / open"을 갱신한다.
 3. `Memo/last_session_report.md`를 새로 쓴다.
-4. `inbox/`의 처리된 메시지를 `inbox/archive/`로 `git mv`로 옮긴다 (deletion 금지, 히스토리 보존).
+4. **archive 이동 폐기 (룰 19 단일 채널 컷오버, 2026-05-04)**: 옛 \"inbox/archive/로 git mv\" 절차 폐기. 처리 표시는 Stoa `since_id` 진행 + `Memo/last_session_report.md`의 처리 letter id 메모로 충분. 옛 `inbox/archive/` 디렉터리는 historical record로 보존, 신규 archive 작업 0.
 5. **inbox 모니터는 끄지 않는다** — 하니스가 끝나면 자연히 멈춘다.
 
 ### §5.1 능동 클락아웃 트리거 (CLAUDE.md 규칙 15)
