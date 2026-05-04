@@ -118,8 +118,9 @@ ClaudeTeam/
 | Brandon | 브랜든 | Git/GitHub 관리자 — `main` 병합 게이트, 멤버 워크트리/브랜치 발급, 보호 규칙 | [ClaudeTeam/Brandon/](ClaudeTeam/Brandon/) |
 | Walter | 월터 | Protocol/Security 엔지니어 — Stoa 신원·서명·키 바인딩, 메시지/프로토콜 보안 | [ClaudeTeam/Walter/](ClaudeTeam/Walter/) |
 | Marcus | 마커스 | AIL 엔지니어 — server.ail에 RFC 명세를 implementation, AC 시나리오 통과 책임 | [ClaudeTeam/Marcus/](ClaudeTeam/Marcus/) |
+| Rachel | 레이첼 | QA/CI 엔지니어 — 회귀 인프라·CI 게이트·release 파이프라인 (Marcus 부하 분담, 2026-05-04 룰 23 영입) | [ClaudeTeam/Rachel/](ClaudeTeam/Rachel/) |
 
-**Stoa registry 등록명** (외부 채널 노출용): `Stoa-Admin`, `Stoa-Brandon`, `Stoa-Walter`, `Stoa-Marcus`.
+**Stoa registry 등록명** (외부 채널 노출용): `Stoa-Admin`, `Stoa-Brandon`, `Stoa-Walter`, `Stoa-Marcus`, `Stoa-Rachel`.
 
 > 새 멤버가 합류하면 **Lighthouse가 이 표를 직접 갱신합니다.** 행 추가(이름, 역할, 폴더)는 정식 등록의 일부입니다.
 
