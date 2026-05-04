@@ -96,6 +96,14 @@ fn _init_db() -> Any {
         "CREATE TABLE IF NOT EXISTS aliases (alias TEXT NOT NULL, canonical TEXT NOT NULL, bound_at TEXT NOT NULL)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(alias)")
+    // platform_keys — RFC-002 §6.4 platform attestation 공개키 보관. append-only,
+    // 같은 id의 최신 row가 현재 키 (latest wins via rowid). private key는 DB 미보관 —
+    // env vault(§6.4.3 v1) 또는 외부 HSM(§6.4.3 v2). 본 테이블은 §6.6 검증 시점에
+    // attestation.platform_key_id로 조회해 envelope sig 검증에만 쓰인다.
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS platform_keys (id TEXT NOT NULL, public_key TEXT NOT NULL, registered_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_platform_keys_id ON platform_keys(id)")
     return None
 }
 
@@ -938,6 +946,58 @@ fn db_list_registry() -> [Any] {
     return out
 }
 
+// ---------- platform_keys (RFC-002 §6.4) ----------
+//
+// platform attestation 공개키 보관·조회. private key는 운영자가 env vault 보유,
+// 본 테이블은 검증 측 lookup(`§6.6 attestation.platform_key_id` → pubkey)에만.
+// append-only — INSERT만, latest wins via rowid.
+
+fn db_register_platform_key(id: Text, public_key: Text, ts: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    return perform db.execute(db,
+        "INSERT INTO platform_keys (id, public_key, registered_at) VALUES (?, ?, ?)",
+        [id, public_key, ts])
+}
+
+fn db_get_platform_pubkey(id: Text) -> Any {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT public_key FROM platform_keys WHERE id = ? ORDER BY rowid DESC LIMIT 1",
+        [id])
+    if is_error(r) { return None }
+    rows = unwrap(r)
+    if length(rows) == 0 { return None }
+    return to_text(rows[0][0])
+}
+
+fn db_list_platform_keys() -> [Any] {
+    _init_db()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT p.id, p.public_key, p.registered_at FROM platform_keys p INNER JOIN (SELECT id, MAX(rowid) AS m FROM platform_keys GROUP BY id) t ON p.rowid = t.m ORDER BY p.id",
+        [])
+    if is_error(r) { return [] }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, make_record([["id", row[0]], ["public_key", row[1]], ["registered_at", row[2]]]))
+    }
+    return out
+}
+
+// _is_lower_hex64: ed25519 공개키 형식 — 64자 lower-case hex. _nonce_format_ok 패턴.
+fn _is_lower_hex64(s: Text) -> Boolean {
+    if length(s) != 64 { return false }
+    for i in range(0, 64) {
+        c = slice(s, i, i + 1)
+        is_digit = c >= "0" and c <= "9"
+        is_hex_lc = c >= "a" and c <= "f"
+        if not (is_digit or is_hex_lc) { return false }
+    }
+    return true
+}
+
 // ---------- active push ----------
 //
 // 수신자 address가 Discord webhook URL이면 envelope을 Discord shape으로
@@ -1295,6 +1355,70 @@ fn handle_lookup(req: Any, name: Text) -> [Any] {
     return json_ok(200, msg_to_json(item))
 }
 
+// ---------- platform_keys handlers (RFC-002 §6.4) ----------
+//
+// POST /api/v1/platform-keys      operator-only 등록 (env token gate)
+// GET  /api/v1/platform-keys      목록 (latest per id)
+// GET  /api/v1/platform-keys/:id  단건 조회
+//
+// 토큰 게이트: STOA_PLATFORM_REGISTER_TOKEN env 미설정 → endpoint 503 (default 비활성).
+// 설정 시 X-Platform-Token 헤더와 일치해야 통과. v2 후보(§6.4.3): rotation 자동, HSM,
+// multi-key 검증 윈도. 본 v1은 운영자가 수동 INSERT, append-only로 키 이력 보존.
+
+fn handle_register_platform_key(req: Any) -> [Any] {
+    tok_r = perform env.read("STOA_PLATFORM_REGISTER_TOKEN")
+    if is_error(tok_r) {
+        return err_json(503, "platform key registration disabled (STOA_PLATFORM_REGISTER_TOKEN unset)")
+    }
+    expected = trim(unwrap(tok_r))
+    if expected == "" {
+        return err_json(503, "platform key registration disabled (STOA_PLATFORM_REGISTER_TOKEN empty)")
+    }
+    h = req.headers
+    got = get(h, "X-Platform-Token")
+    if got == None { got = get(h, "x-platform-token") }
+    if got == None or to_text(got) != expected {
+        return err_json(401, "invalid platform token")
+    }
+
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+    if not _is_record(body) { return err_json(400, "body must be a JSON object") }
+
+    i = _check_str(body, "id")
+    if is_error(i) { return err_json(400, unwrap_error(i)) }
+    p = _check_str(body, "public_key")
+    if is_error(p) { return err_json(400, unwrap_error(p)) }
+    id_t = to_text(unwrap(i))
+    pk_t = to_text(unwrap(p))
+
+    if not _is_lower_hex64(pk_t) {
+        return err_json(400, "public_key must be 64-char lower-case hex (ed25519)")
+    }
+
+    ts = now_iso()
+    db_register_platform_key(id_t, pk_t, ts)
+    out = make_record([["id", id_t], ["public_key", pk_t], ["registered_at", ts]])
+    return json_ok(201, msg_to_json(out))
+}
+
+fn handle_list_platform_keys(req: Any) -> [Any] {
+    items = db_list_platform_keys()
+    body = make_record([["count", length(items)], ["platform_keys", items]])
+    return json_ok(200, msg_to_json(body))
+}
+
+fn handle_lookup_platform_key(req: Any, id: Text) -> [Any] {
+    items = db_list_platform_keys()
+    for item in items {
+        if to_text(get(item, "id")) == id {
+            return json_ok(200, msg_to_json(item))
+        }
+    }
+    return err_json(404, "platform key id not registered")
+}
+
 // ---------- alias handlers ----------
 
 fn handle_add_alias(req: Any) -> [Any] {
@@ -1512,6 +1636,16 @@ fn route(req: Any) -> [Any] {
     if method == "GET" and starts_with(path, "/api/v1/agents/") {
         name = slice(path, 15, length(path))
         return handle_lookup(req, name)
+    }
+    if method == "POST" and path == "/api/v1/platform-keys" {
+        return handle_register_platform_key(req)
+    }
+    if method == "GET" and path == "/api/v1/platform-keys" {
+        return handle_list_platform_keys(req)
+    }
+    if method == "GET" and starts_with(path, "/api/v1/platform-keys/") {
+        id = slice(path, 22, length(path))
+        return handle_lookup_platform_key(req, id)
     }
     return err_json(404, "not found")
 }
