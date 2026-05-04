@@ -7,6 +7,10 @@
 set -uo pipefail
 URL="${STOA_URL:-http://localhost:18888}"
 
+# issue#4 sender registry gate — 발신자 ergon 사전 등록 (idempotent).
+curl -s -X POST "$URL/api/v1/agents" -H "Content-Type: application/json" \
+    -d '{"name":"ergon","address":"http://x"}' > /dev/null
+
 echo "[1] DELETE는 404 (grammar에 없음)"
 code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$URL/api/v1/messages/anything")
 [ "$code" = "404" ] || { echo "FAIL: DELETE returned $code (expected 404)"; exit 1; }

@@ -1116,12 +1116,17 @@ fn handle_post_message(req: Any) -> [Any] {
         return err_json(401, "unauthorized envelope")
     }
 
+    // issue#4 Phase A — 송신자 registry 강제 (impersonation 방어).
+    // 수신자 to.name은 이미 registry 등재 필수인데 from.name은 무방비였다.
+    // Phase 2/3 서명 강제 land 전까지 평등 게이트로 차단. 자동 self-register 안 함
+    // — 그게 곧 impersonation 허용. 미등록 발신자는 POST /api/v1/enter로 명시 등록 후 재시도.
     sender = db_lookup(from_name)
-    sender_pk = None
-    if sender != None {
-        spk = get(sender, "public_key")
-        if spk != None and to_text(spk) != "" { sender_pk = to_text(spk) }
+    if sender == None {
+        return err_json(400, join(["sender '", from_name, "' not in registry. Register via POST /api/v1/enter first."], ""))
     }
+    sender_pk = None
+    spk = get(sender, "public_key")
+    if spk != None and to_text(spk) != "" { sender_pk = to_text(spk) }
     phase = _get_signing_phase()
 
     // verify_required 결정 (RFC §8 표):

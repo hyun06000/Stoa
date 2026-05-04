@@ -49,6 +49,10 @@ fi
 
 strip_ws() { tr -d ' \t\r\n'; }
 
+# issue#4 sender registry gate — 발신자 alice 사전 등록.
+curl -s -X POST "$URL/api/v1/agents" -H "Content-Type: application/json" \
+    -d "{\"name\":\"alice\",\"address\":\"$SELF_ORIGIN/inbox/alice\"}" > /dev/null
+
 # I3-1 — self-host recipient
 body=$(curl -s -m 10 -X POST "$URL/api/v1/messages" \
     -H "Content-Type: application/json" \

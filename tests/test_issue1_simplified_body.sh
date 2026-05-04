@@ -52,6 +52,10 @@ assert_201() {
 }
 
 echo "── Issue #1: simplified-body / wrong-shape POST /api/v1/messages ──"
+
+# issue#4 sender registry gate — I1-7 sanity 발신자 alice-i1 사전 등록.
+curl -s -X POST "$URL/api/v1/agents" -H "Content-Type: application/json" \
+    -d '{"name":"alice-i1","address":"http://a/inbox"}' > /dev/null
 assert_400 "I1-1 simplified {from:text, content:text}" \
     '{"from":"test","content":"hello"}'
 assert_400 "I1-2 body is array" \

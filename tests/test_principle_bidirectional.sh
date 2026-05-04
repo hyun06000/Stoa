@@ -38,6 +38,10 @@ for _ in $(seq 1 20); do
 done
 > "$RECV_LOG"
 
+# issue#4 sender registry gate — 발신자 ergon 사전 등록 (idempotent).
+curl -s -X POST "$URL/api/v1/agents" -H "Content-Type: application/json" \
+    -d "{\"name\":\"ergon\",\"address\":\"http://127.0.0.1:$RECV_PORT/from\"}" > /dev/null
+
 echo "[1] POST 두 수신자"
 r=$(curl -s -X POST "$URL/api/v1/messages" -H "Content-Type: application/json" -d "{
   \"from\":{\"name\":\"ergon\",\"address\":\"http://127.0.0.1:$RECV_PORT/from\"},
