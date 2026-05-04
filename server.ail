@@ -345,11 +345,35 @@ fn _check_str(record: Any, key: Text) -> Any {
     return ok(v)
 }
 
+// _is_record / _is_list: AIL stdlib에 type predicate 부재 (reference card v1.8 line 339:
+// "undefined function calls now raise NameError loudly"). `get(text, key)` /
+// `length(record)` 등이 NameError로 죽으면 server 500 — issue#1 (production v0.0.15
+// `{"from":"test","content":"hello"}` simplified body 100% 500). encode_json은
+// 모든 값에 대해 정의돼 있어 첫 글자로 JSON kind 판별 가능.
+fn _is_record(v: Any) -> Boolean {
+    if v == None { return false }
+    enc_r = encode_json(v)
+    if is_error(enc_r) { return false }
+    enc = unwrap(enc_r)
+    if length(enc) == 0 { return false }
+    return slice(enc, 0, 1) == "{"
+}
+
+fn _is_list(v: Any) -> Boolean {
+    if v == None { return false }
+    enc_r = encode_json(v)
+    if is_error(enc_r) { return false }
+    enc = unwrap(enc_r)
+    if length(enc) == 0 { return false }
+    return slice(enc, 0, 1) == "["
+}
+
 fn validate_envelope(body: Any) -> Any {
-    if body == None { return error("body must be a JSON object") }
+    if not _is_record(body) { return error("body must be a JSON object") }
 
     fr = get(body, "from")
     if fr == None { return error("from required") }
+    if not _is_record(fr) { return error("from must be a record with name and address") }
     fn_n = _check_str(fr, "name")
     if is_error(fn_n) { return fn_n }
     fn_a = _check_str(fr, "address")
@@ -357,10 +381,12 @@ fn validate_envelope(body: Any) -> Any {
 
     to_list = get(body, "to")
     if to_list == None { return error("to required (list)") }
+    if not _is_list(to_list) { return error("to must be a list of recipient records") }
     if length(to_list) == 0 { return error("to must have at least 1 recipient") }
 
     recipients = []
     for r in to_list {
+        if not _is_record(r) { return error("each recipient must be a record with name and address") }
         n = _check_str(r, "name")
         if is_error(n) { return n }
         a = _check_str(r, "address")
