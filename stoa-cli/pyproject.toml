@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stoa-cli"
+version = "0.1.0"
+description = "Identity & ed25519 signing helper for Stoa (RFC-001 §6)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Stoa team" }]
+dependencies = ["cryptography>=41.0"]
+
+[project.scripts]
+stoa-cli = "stoa_cli.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hyun06000/Stoa"
+
+[tool.setuptools.packages.find]
+include = ["stoa_cli*"]
