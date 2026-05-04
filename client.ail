@@ -36,6 +36,70 @@ fn get_stoa_url() -> Text {
     return trim(unwrap(r))
 }
 
+// CLIENT_SECRET_KEY: 64-char hex ed25519 sk. 부재 시 무서명 발신 (Phase 0/1 grandfather).
+// Phase 2+ 환경에서 키 등록된 발신자가 sk 없이 발신하면 server가 403.
+fn get_secret_key() -> Text {
+    r = perform env.read("CLIENT_SECRET_KEY")
+    if is_error(r) { return "" }
+    return trim(unwrap(r))
+}
+
+fn now_iso() -> Text {
+    r = perform clock.now("iso")
+    if is_error(r) { return "" }
+    return unwrap(r)
+}
+
+// ---------- RFC-001 §6.1 canonical (server.ail mirror) ----------
+
+// _esc: §6.1 escape 순서 고정 — `\\` → `\|` → `\;` → `\:`.
+fn _esc(s: Text) -> Text {
+    a = replace(s, "\\", "\\\\")
+    b = replace(a, "|", "\\|")
+    c = replace(b, ";", "\\;")
+    return replace(c, ":", "\\:")
+}
+
+// _sort_recipients_by_name: name lex 오름차순. AIL stdlib sort key fn 부재로 selection sort.
+fn _sort_recipients_by_name(recipients: [Any]) -> [Any] {
+    n = length(recipients)
+    pool = []
+    for r in recipients { pool = append(pool, r) }
+    out = []
+    for _ in range(0, n) {
+        m = length(pool)
+        best = 0
+        for i in range(1, m) {
+            if to_text(get(pool[i], "name")) < to_text(get(pool[best], "name")) {
+                best = i
+            }
+        }
+        out = append(out, pool[best])
+        new_pool = []
+        for i in range(0, m) {
+            if i != best { new_pool = append(new_pool, pool[i]) }
+        }
+        pool = new_pool
+    }
+    return out
+}
+
+// canonical_letter: §6.1 byte-exact mirror of server.ail.
+fn canonical_letter(from_name: Text, from_address: Text, recipients: [Any], content: Text, created_at: Text, nonce: Text) -> Text {
+    sorted_to = _sort_recipients_by_name(recipients)
+    parts = []
+    for r in sorted_to {
+        parts = append(parts, join([
+            _esc(to_text(get(r, "name"))), ":", _esc(to_text(get(r, "address")))
+        ], ""))
+    }
+    to_str = join(parts, ";")
+    return join([
+        "letter|", _esc(from_name), "|", _esc(from_address), "|",
+        to_str, "|", _esc(content), "|", _esc(created_at), "|", _esc(nonce)
+    ], "")
+}
+
 // ---------- json ----------
 
 fn to_json_text(obj: Any) -> Text {
@@ -110,14 +174,49 @@ fn handle_post_send(req: Any) -> [Any] {
     content = get(body, "content")
     if content == None { return err(400, "content required") }
 
+    from_name = get_name()
+    from_address = get_address()
     from_obj = make_record([
-        ["name", get_name()],
-        ["address", get_address()]
+        ["name", from_name],
+        ["address", from_address]
     ])
+
+    // RFC-001 §6.6: CLIENT_SECRET_KEY 있으면 envelope에 created_at/nonce/signature 부착.
+    // 없으면 무서명 발신 (Phase 0/1 grandfather; Phase 2+ 키 등록 발신자는 server 403 됨).
+    sk_hex = get_secret_key()
+    if sk_hex == "" {
+        payload = make_record([
+            ["from", from_obj],
+            ["to", to_list],
+            ["content", content]
+        ])
+        stoa = get_stoa_url()
+        url = join([stoa, "/api/v1/messages"], "")
+        resp = perform http.post_json(url, payload, [], timeout: 5)
+        if is_error(resp) {
+            return err(502, join(["stoa unreachable: ", to_text(resp)], ""))
+        }
+        return json_resp(200, make_record([["sent_to_stoa", true], ["signed", false]]))
+    }
+
+    created_at = now_iso()
+    if created_at == "" { return err(500, "clock.now failed") }
+    nonce_r = crypto_random_bytes(16)
+    if is_error(nonce_r) { return err(500, join(["nonce gen failed: ", to_text(nonce_r)], "")) }
+    nonce_hex = unwrap(nonce_r)
+
+    canon = canonical_letter(from_name, from_address, to_list, to_text(content), created_at, nonce_hex)
+    sig_r = crypto_sign_ed25519(sk_hex, canon)
+    if is_error(sig_r) { return err(500, join(["sign failed: ", to_text(sig_r)], "")) }
+    signature_hex = unwrap(sig_r)
+
     payload = make_record([
         ["from", from_obj],
         ["to", to_list],
-        ["content", content]
+        ["content", content],
+        ["created_at", created_at],
+        ["nonce", nonce_hex],
+        ["signature", signature_hex]
     ])
 
     stoa = get_stoa_url()
@@ -126,7 +225,7 @@ fn handle_post_send(req: Any) -> [Any] {
     if is_error(resp) {
         return err(502, join(["stoa unreachable: ", to_text(resp)], ""))
     }
-    return json_resp(200, make_record([["sent_to_stoa", true]]))
+    return json_resp(200, make_record([["sent_to_stoa", true], ["signed", true]]))
 }
 
 // ---------- routing ----------
@@ -145,7 +244,7 @@ fn route(req: Any) -> [Any] {
 
 evolve client {
     listen: 9000
-    effects: [http.respond, http.post_json, state.read, state.write, env.read]
+    effects: [http.respond, http.post_json, state.read, state.write, env.read, clock.now]
     metric: error_rate
     when request_received(req) {
         result = route(req)
