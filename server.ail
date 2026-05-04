@@ -1031,19 +1031,37 @@ fn _push_one(addr: Text, envelope: Any) -> Any {
     }
 }
 
-fn push_to_recipients(recipients: [Any], envelope: Any) -> Any {
+// _is_self_host: 수신자 address가 자기 host(현재 요청 origin)와 같은가.
+// issue#3 — 컨테이너 내부 → public hostname HTTPS loopback이 TCP/TLS 단계에서
+// hang. 자기 host는 push 자체가 불필요(letter는 같은 DB에 이미 INSERT). skip이
+// 가장 가벼운 fix. self_origin이 빈 문자열이면 detect off (보수적 default).
+fn _is_self_host(addr: Text, self_origin: Text) -> Boolean {
+    if self_origin == "" { return false }
+    return starts_with(addr, self_origin)
+}
+
+// push_to_recipients: issue#3 hotfix — self-host skip + skipped 카운터.
+// 호출자가 self_origin(_stoa_origin(req)) 전달. self_origin과 prefix-매칭되는
+// recipient는 push 시도 0, skipped++. 외부 receivers는 issue#2 fix(_push_one
+// attempt+try) 그대로.
+fn push_to_recipients(recipients: [Any], envelope: Any, self_origin: Text) -> Any {
     delivered = 0
     failed = 0
+    skipped = 0
     for r in recipients {
         addr = to_text(get(r, "address"))
-        resp = _push_one(addr, envelope)
-        if is_error(resp) {
-            failed = failed + 1
+        if _is_self_host(addr, self_origin) {
+            skipped = skipped + 1
         } else {
-            delivered = delivered + 1
+            resp = _push_one(addr, envelope)
+            if is_error(resp) {
+                failed = failed + 1
+            } else {
+                delivered = delivered + 1
+            }
         }
     }
-    return make_record([["delivered", delivered], ["failed", failed]])
+    return make_record([["delivered", delivered], ["failed", failed], ["skipped", skipped]])
 }
 
 // ---------- response helpers ----------
@@ -1212,7 +1230,8 @@ fn handle_post_message(req: Any) -> [Any] {
     // notify_discord 먼저 — push가 timeout으로 raise하면 핸들러가 500되어
     // mirror가 영영 안 탐. mirror는 보존되어야 할 신호이므로 우선.
     notify_discord(envelope)
-    push = push_to_recipients(resolved_recipients, envelope)
+    self_origin = _stoa_origin(req)
+    push = push_to_recipients(resolved_recipients, envelope, self_origin)
 
     response = make_record([["envelope", envelope], ["push", push]])
     return json_ok(201, msg_to_json(response))
