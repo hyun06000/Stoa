@@ -48,6 +48,23 @@ for t in "$SCRIPT_DIR"/test_*.sh; do
     fi
 done
 
+# RFC-004 Phase A — STOA_PHASE_A=1일 때만 실행. Marcus Phase A 코드 main land
+# 전까지 default 0 → 회귀 0 + 임계 자리 보존. land 후엔 env 1로 활성.
+if [ "${STOA_PHASE_A:-0}" = "1" ] && [ -d "$SCRIPT_DIR/phase_a" ]; then
+    for t in "$SCRIPT_DIR"/phase_a/test_*.sh; do
+        [ -f "$t" ] || continue
+        name="phase_a/$(basename "$t")"
+        echo
+        echo "── $name ────────────────────────────────────"
+        if STOA_URL="$URL" STOA_PHASE_A=1 bash "$t"; then
+            PASS=$((PASS+1))
+        else
+            FAIL=$((FAIL+1))
+            echo "  ✗ $name FAILED"
+        fi
+    done
+fi
+
 echo
 echo "════════════════════════════════════════════════"
 echo "  pass=$PASS  fail=$FAIL"
