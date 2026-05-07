@@ -14,8 +14,15 @@
 #   )
 #
 # 환경 변수:
-#   STOA_NAME            (필수) 자기 멤버 이름 — Admin / Brandon / Walter / Marcus 등.
-#                        미설정 시 `git config ail.identity` (없으면 fallback `ergon`)에서 읽음.
+#   STOA_NAME            (필수) 자기 멤버 이름 — Stoa-<role> 형식 권고 (예: Stoa-Walter).
+#                        미설정 시 다음 우선순위로 fallback (2026-05-07 arche review 정합):
+#                          1. `git config --worktree ail.identity` — 워크트리 별 영속 (Brandon
+#                             SOP `git config --worktree ail.identity Stoa-<이름>` 발급 시 박음).
+#                          2. `git config ail.identity` — global fallback.
+#                          3. literal `unknown-host` — 사람 눈에 명백히 잘못 보이는 값.
+#                             (직전 fallback `ergon`은 *정상 이름처럼 보이는* 값이라 typo 사고
+#                              자리. 2026-05-07 Marcus 사고 직접 학습 — letter catch 0.)
+#                        운영 시 항상 `STOA_NAME` 명시. fallback 신뢰 금지.
 #   STOA_BASE_URL        (선택) default: https://ail-stoa.up.railway.app
 #   STOA_WAKE_INTERVAL_S (선택) default: 3 (초)
 #   STOA_SINCE_FILE      (선택) default: .stoa-since-<name>. since_id 영속화 path.
@@ -29,7 +36,7 @@
 
 set -uo pipefail
 
-NAME="${STOA_NAME:-$(git config ail.identity 2>/dev/null || echo ergon)}"
+NAME="${STOA_NAME:-$(git config --worktree ail.identity 2>/dev/null || git config ail.identity 2>/dev/null || echo unknown-host)}"
 BASE="${STOA_BASE_URL:-https://ail-stoa.up.railway.app}"
 INTERVAL="${STOA_WAKE_INTERVAL_S:-3}"
 SINCE_FILE="${STOA_SINCE_FILE:-.stoa-since-$NAME}"

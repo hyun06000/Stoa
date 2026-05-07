@@ -28,7 +28,7 @@ Monitor(
 
 | 변수 | 기본값 | 의미 |
 |------|--------|------|
-| `STOA_NAME` | `git config ail.identity` 또는 `ergon` | 자기 멤버 이름. 폴링 대상 (`?to=<name>`). |
+| `STOA_NAME` | `git config --worktree ail.identity` → `git config ail.identity` → `unknown-host` | 자기 멤버 이름. 폴링 대상 (`?to=<name>`). 운영 시 명시 의무 — fallback `unknown-host`는 *눈에 명백히 잘못 보이는 값*으로 typo 표면 (Marcus 사고 학습). 옛 fallback `ergon`은 정상처럼 보여 letter catch 0 사고 자리. |
 | `STOA_BASE_URL` | `https://ail-stoa.up.railway.app` | Stoa origin. |
 | `STOA_WAKE_INTERVAL_S` | `3` | 폴링 간격(초). |
 | `STOA_SINCE_FILE` | `.stoa-since-<name>` | `since_id` 영속화 path. 재시작 시 이어감. |
