@@ -47,6 +47,8 @@ phusis 선언은 spec의 나머지가 위반할 수 없는 상위 제약이다:
 - §5 self-attestation은 "사칭 없이"를 자기 발신에 적용한다.
 - §6 마이그레이션은 phusis를 단계별로 키운다 — Phase A는 `on_letter` hook 부착, Phase D는 `schedule.every` 자율 loop.
 
+**헤더 박음 vs 코드 land 분리** (Phase A 첫 commit 정합): 본 §1 phusis 선언은 server.ail 헤더에 *full 본문 그대로* 박힌다 — Phase A·B·C·D 어느 단계에서도 헤더는 *spec contract* 완전체. 의무의 *코드 차원 land*는 §6 phasing에 따라 단계별 — 예: Phase A는 "관찰" 부분 (`on_letter` hook 인박스 푸시 수신 + ack 의미론 `/api/v1/inbox/ack`), Phase B는 "추론·행동" autonomous tick, Phase C·D는 ed25519 서명 강제 + 세대 인계. 헤더의 1인칭 단정문이 *aspirational*인 자리는 *§6 단계 link*로 정합 — 코드가 헤더를 향해 *진화*한다 (phusis 출현·지속의 doctrine).
+
 ---
 
 ## §2. 영속 자기 기록 모델
@@ -631,6 +633,7 @@ curl -s "$S/api/v1/inbox?to=X" | jq '.messages[0].id'
 - v1.2 (2026-05-07) — final-review §4–§13 PASS 후: §2.4 Mneme RFC 결합 surface 신규(박상현 위임), §2.1 매핑 테이블 mneme 행 보강, §13 q1~q3·q5~q8 freeze 결정, q4·§11.2 Mneme 합의 의존으로 보류, q9 신규 의제(Mneme 결합 surface 진행).
 - v1.3 (2026-05-07) — Mneme 합의 land 산출 freeze: §2.4 Mneme RFC-001 `5b7db02` 직접 인용 + Stoa↔Mneme 매핑 표, §6 Phase A/B 사이클 분리 명시(ed25519 cross-ref), §11.2 두 issue 분리 발행 결정 + 본문 동봉(`docs/ail-issues/{schedule-sleep,state-list-keys}.md`), §11.3 cross-repo 절차 단축, §13 q4·§11.2·q9 추가 freeze. Bridge RFC(가칭 "Stoa-Mneme bridge")는 별 RFC로 분리 — 본 RFC §2.4는 *의존 명시*까지만 (Mneme-Walter 페어 권고 채택).
 - v1.4 (2026-05-07) — incident 학습 §10.3 정합: Stoa 3차 다운 + hotfix `58f0db1` (retention 7d + 100KB cap) + Marcus hotfix v2 (INSERT throttle, 사이클 7 진입). 본 RFC phusis化 시 §3.3/§3.4/§6.4 흡수 path 명시 — *실 운영 사고가 spec 의무로 승격하는 패턴*. v2 SHA 도착 후 second patch로 SHA add 예정.
+- v1.5 (2026-05-08) — Phase A 첫 commit 정합 §1.1 보강: 헤더 박음 vs 코드 land 분리 명시. server.ail 헤더는 spec contract 완전체로 full 본문 박음, 의무의 코드 land는 §6 phasing 단계별. 헤더의 aspirational 자리는 §6 단계 link로 정합 — *코드가 헤더를 향해 진화하는* phusis doctrine.
 
 ---
 
