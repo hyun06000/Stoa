@@ -67,6 +67,8 @@ ClaudeTeam/<자신>/
 
 Brandon이 자리잡은 후의 신규 멤버는 **먼저 Brandon에게 워크트리를 요청**해야 합니다. 워크트리가 없는 곳에서는 안전하게 커밋할 수 없습니다. Brandon이 `member/<이름>` 브랜치와 `Stoa/<이름>/` 워크트리(repo 형제 path)를 만들어주면, 그 안에서 §1의 폴더 작업을 진행하세요.
 
+**워크트리 정체성 영속 (2026-05-07 추가)**: Brandon이 워크트리 발급 시 다음 한 줄을 자동 실행 — `git -C <worktree> config --worktree ail.identity Stoa-<이름>`. 이 line이 wake_monitor의 `STOA_NAME` env 미설정 시 fallback의 *영속 source*. 이 줄 없으면 멤버가 `STOA_NAME=` typo 시 fallback `unknown-host`로 빠져 letter catch 0이 됨 (2026-05-07 Marcus 사고 학습 — 옛 fallback `ergon`은 외부 식별자라 더 위험했고 `unknown-host`로 교체 + per-worktree 영속이 정확한 zero-typo 방어).
+
 ### §1.6 inbox 디렉터리 + 모니터 — 두 단계 (워크트리 발급 전·후)
 
 **중요 — 두 path는 동일하지 않습니다.** repo 측(`Stoa/Stoa/ClaudeTeam/<자신>/inbox/`)과 자기 워크트리(`Stoa/<자신>/ClaudeTeam/<자신>/inbox/`)는 같은 git 트리의 두 working copy일 뿐, **물리적으로 다른 inode·다른 디렉터리**입니다. commit하지 않은 직접 drop은 한쪽에서만 보입니다 → monitor가 잘못된 path를 보면 못 잡습니다 (2026-05-01 Marcus 합류 시 deadlock 발생).
