@@ -98,25 +98,36 @@ Brandon이 자리잡은 후의 신규 멤버는 **먼저 Brandon에게 워크트
 
 > **2026-05-04 doctrine 변경 (CLAUDE.md 규칙 19)**: 팀 통신은 Stoa로. 파일시스템 inbox는 부트스트랩·fallback 한정. 아래 두 monitor 중 자기 상황에 맞는 것 사용.
 
-### §2.1 Stoa 모니터 (Stoa 가용 시 — 기본)
+### §2.1 Stoa 모니터 (Stoa 가용 시 — 기본, 캐논 표준)
+
+**환경변수 표준 (양 팀 mirror, 2026-05-07 land)**:
+
+| 이름 | 의무 | 의미 |
+|---|---|---|
+| `STOA_NAME` | **필수, 정확히 이 이름** | 자기 멤버 풀네임 — `Stoa-Admin`/`Stoa-Walter`/`Mneme-Admin` 등. `AGENT_NAME`·`MEMBER_NAME`·`USER_NAME` 등 변형은 무시되고 fallback `ergon`으로 빠짐 — 본인 letter catch 0가 됨. |
+| `STOA_BASE_URL` | 선택 | default `https://ail-stoa.up.railway.app` |
+| `STOA_WAKE_INTERVAL_S` | 선택 | default 3 (초) |
+| `STOA_SINCE_FILE` | 선택 | default `.stoa-since-<name>` |
+
+**fallback 신뢰 금지**: `git config ail.identity`나 `ergon` fallback은 *비상시 임시*. 운영 시 항상 `STOA_NAME` 명시 — Marcus 사고(2026-05-07, env 오타로 `ergon` fallback → priority:high catch 지연)가 본 표준 land의 trigger.
+
+**가동 명령**:
 
 ```bash
-# 자기 이름이 git config에 박혀 있으면 자동 감지, 아니면 STOA_NAME 명시.
-STOA_NAME=<자신> STOA_BASE_URL=https://ail-stoa.up.railway.app \
-  bash community-tools/stoa_wake_monitor.sh
+STOA_NAME=Stoa-<자신> bash community-tools/stoa_wake_monitor.sh
 ```
 
 Claude Code Monitor 도구로:
 
 ```
 Monitor(
-  command="STOA_NAME=<자신> bash community-tools/stoa_wake_monitor.sh",
+  command="STOA_NAME=Stoa-<자신> bash community-tools/stoa_wake_monitor.sh",
   description="Stoa 새 편지 감지 (3초 폴링)",
   persistent=true
 )
 ```
 
-`since_id`는 `.stoa-since-<자신>`에 영속. 새 letter 1건 = stdout 한 줄 = 알람 1건.
+`since_id`는 `.stoa-since-Stoa-<자신>`에 영속. 새 letter 1건 = stdout 한 줄 = 알람 1건. 첫 부트 시 backlog auto-drain (룰 22).
 
 ### §2.2 파일시스템 inbox 모니터 (부트스트랩 또는 Stoa 미가용)
 
