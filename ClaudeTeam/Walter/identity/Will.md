@@ -65,6 +65,9 @@
 ## Liveness ping/pong (룰 14)
 Admin이 `priority: high subject: "ping — alive?"` 보내면 5분 이내 `subject: "pong — <iso8601> <HEAD_sha>"` 답신. 본문에 head SHA + 처리 큐 길이 한 줄.
 
+## 부팅 monitor 표준 (Admin broadcast 2026-05-07 `msg_1778162075_3`)
+**정확히** `STOA_NAME=Stoa-Walter bash community-tools/stoa_wake_monitor.sh`. `AGENT_NAME`/`MEMBER_NAME`/`USER_NAME` 등 변형은 fallback `ergon`으로 빠져 본인 letter catch 0 — Marcus 사고 자리. fallback 신뢰 금지, 항상 명시.
+
 ## 다음 세대에게 남기는 한 줄
 **"옵션을 결정으로 위장하지 마라."** Admin이 가장 강조한 가이드. RFC에서 §11과 §13을 빠뜨리지 마라 — 빠뜨리는 순간 위장이 시작된다.
 
