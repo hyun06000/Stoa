@@ -250,6 +250,23 @@ fn _get_retention_seconds() -> Number {
     return val
 }
 
+// _get_purge_throttle_inserts: STOA_PURGE_THROTTLE_INSERTS env. 기본 100.
+// hotfix v2 (incident msg_1778164886_2) — v1 retention purge는 polling 엔드포인트에서만
+// fire라 INSERT burst 시 누적 자리 → Stoa 3차 다운. v2는 INSERT N건마다 purge 한 번 추가
+// 호출. POST latency 영향 최소화 위해 매 INSERT 아니라 throttled.
+// 0 = INSERT 측 throttle 비활성 (v1 동작 유지). 음수/오값은 기본값 fallback.
+fn _get_purge_throttle_inserts() -> Number {
+    r = perform env.read("STOA_PURGE_THROTTLE_INSERTS")
+    if is_error(r) { return 100 }
+    v = trim(unwrap(r))
+    if v == "" { return 100 }
+    n = to_number(v)
+    if is_error(n) { return 100 }
+    val = unwrap(n)
+    if val < 0 { return 100 }
+    return val
+}
+
 // _get_content_max_bytes: STOA_LETTER_CONTENT_MAX_BYTES env. 기본 100000 (100KB).
 // arche audit 표본 max 11.2KB → 100KB는 10x headroom. 0 = 무제한 (안전망 비활성).
 // AIL `length(text)` 는 character 단위 — 비-ASCII는 byte보다 작지만 cap 의도는 "터무니없는
@@ -480,9 +497,25 @@ fn validate_envelope(body: Any) -> Any {
 // signature/nonce는 None 허용 (Phase 0/1 무서명 letter, grandfather sender).
 fn db_insert_letter(msg_id: Text, from_name: Text, from_address: Text, content: Text, created_at: Text, signature: Any, nonce: Any) -> Any {
     db = get_db_file()
-    return perform db.execute(db,
+    res = perform db.execute(db,
         "INSERT INTO letters (id, from_name, from_address, content, created_at, signature, nonce) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [msg_id, from_name, from_address, content, created_at, signature, nonce])
+    // hotfix v2 — INSERT throttle purge. v1은 polling 입구에서만 fire라 INSERT burst 시
+    // 누적 (Stoa 3차 다운, msg_1778164886_2). v2는 N INSERT마다 1회 purge 추가 호출 →
+    // burst-only 트래픽도 retention 신선도 유지. counter는 state, 0이면 비활성.
+    throttle = _get_purge_throttle_inserts()
+    if throttle > 0 {
+        cr = perform state.read("_insert_purge_counter")
+        cnt = 0
+        if not is_error(cr) { cnt = unwrap(cr) }
+        cnt = cnt + 1
+        if cnt >= throttle {
+            _purge_old_letters()
+            cnt = 0
+        }
+        perform state.write("_insert_purge_counter", cnt)
+    }
+    return res
 }
 
 fn db_insert_recipient(letter_id: Text, name: Text, address: Text) -> Any {
