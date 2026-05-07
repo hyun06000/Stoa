@@ -47,7 +47,7 @@ perform schedule.sleep(seconds: Number) -> Result[Boolean]
 
 - `schedule.sleep(0)` → `ok(false)` 즉시.
 - `schedule.sleep(<0)` → `ok(false)` 즉시 (negative as "no-op").
-- `schedule.sleep(NaN/Inf)` → `err("invalid duration")`.
+- `schedule.sleep(NaN/Inf)` → `err("invalid duration")`. *AIL Number 모델 의존* — IEEE-754면 적용, 정수 only면 본 edge 자체 발생 안 함 (parser/runtime이 미리 차단). Stoa-Marcus check-in pending.
 - 매우 큰 값 (예: 1e9 초) → 허용. 인스턴스 lifetime 안에 wake 안 일어나면 `on_death`로 interrupt.
 - 핸들러 안 sleep과 timeout(예: HTTP 60초 limit) 정합: sleep이 핸들러 timeout보다 길면 outer timeout이 핸들러를 abort, sleep도 함께 중단.
 
@@ -60,7 +60,7 @@ perform schedule.sleep(seconds: Number) -> Result[Boolean]
 ## Acceptance criteria
 
 - AC-1 — `schedule.sleep(1)` 호출 후 `clock.now("unix")` 차이 ≥ 1초.
-- AC-2 — `schedule.sleep(0.5)` 호출 후 차이 ≥ 0.5초 (sub-second 지원 시).
+- AC-2 — `schedule.sleep(0.5)` 호출 후 차이 ≥ 0.5초 (sub-second 지원 시 — 의무 아님, **best-effort**. backing platform이 ms 정밀도 제공 못 하면 통과로 판정. AIL CAST가 다 platform 검증 시 본 AC를 conditional로 표시).
 - AC-3 — `schedule.sleep(0)` 즉시 반환 (`ok(false)`, 차이 < 100ms).
 - AC-4 — `schedule.sleep(-1)` 즉시 반환 (`ok(false)`).
 - AC-5 — 같은 인스턴스 안 `schedule.sleep(5)` 핸들러 진행 중 다른 핸들러가 정상 응답 (worker 차단 0).

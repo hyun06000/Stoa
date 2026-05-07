@@ -51,13 +51,14 @@ perform state.list_keys(prefix: Text) -> Result[[Text]]
 
 - **Snapshot semantics**: 호출 시점의 키 집합. 호출 직후 `state.write`로 새 키 추가되어도 본 호출 결과에는 미반영.
 - **Atomicity는 *컬렉션 단위* 아님**: 호출 중간에 다른 worker가 삭제한 키가 결과에 포함될 수 있음 (best-effort consistency). atomic snapshot이 필요하면 호출자가 락 합성 — 본 primitive는 *list 자체*만.
-- **정렬**: lex 오름차순 보장 권고. 미보장으로 둘 거면 호출자가 sort. 권고 시그니처는 lex-asc.
+- **정렬**: **미보장**. 호출자가 sort 의무. 근거 — backing store 자유도 보존(어느 store는 lex 자연, 어느 store는 hash). 시그니처 단순화로 land 가속.
+- **Prefix가 자기 자신을 키로 가질 때**: `state.has(prefix) == true`이면 결과에 prefix 자체도 포함. 즉 `state.list_keys("foo")`는 `"foo"`(존재 시) + `"foo.*"` 모두 반환. 호출자가 `"foo." prefix only`를 원하면 prefix에 trailing separator (`"foo."`) 명시.
 - **빈 결과**: `ok([])` (err 아님).
 - **Empty prefix**: 모든 키 반환 — *큰 store에서는 비싼 호출*. 호출자 책임으로 prefix를 좁게.
 
 ### Edge cases
 
-- prefix 자체가 키 — `state.list_keys("foo")` + `state.has("foo") == true` → `["foo", "foo.bar", ...]` 반환 (prefix가 자기 자신을 포함).
+(prefix 자기 자신 포함 규칙은 §의미론으로 이동.)
 - 매우 긴 prefix (수 KB) → backing store 의존, 권고 max length 명시(예: 1KB).
 - 매우 큰 결과 (수만 키) → pagination 미지원 (단순 primitive). 호출자가 prefix를 더 좁게 사용. pagination이 필요하면 별 primitive 후속(`state.list_keys_paginated`).
 - 동시 write 중 호출 → snapshot semantic 위 best-effort. 결과에 직전 삭제된 키 포함 가능 (호출자가 후속 `state.read` 시 `err("not found")` 처리).
@@ -74,7 +75,7 @@ perform state.list_keys(prefix: Text) -> Result[[Text]]
 - AC-2 — `state.list_keys("nonexistent.")` → `ok([])`.
 - AC-3 — prefix 자기 자신: `state.write("foo", 0)` + `state.list_keys("foo")` → `ok(["foo", "foo.a", "foo.b"])`.
 - AC-4 — empty prefix: `state.list_keys("")` → 모든 키.
-- AC-5 — 정렬: lex 오름차순(권고), 또는 정렬 미보장 명시.
+- AC-5 — 정렬 미보장. 호출자 sort 의무 (시그니처 단순). 결과 순서는 backing store 의존.
 - AC-6 — Snapshot: 호출 진행 중 다른 worker가 `state.write("foo.c", 3)` 호출 → 본 호출 결과에 `foo.c` 미포함 또는 포함 (best-effort).
 
 ## Cross-link
