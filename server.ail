@@ -818,6 +818,88 @@ fn _advance_cursor(name: Text, mid: Text, ts: Text) -> Text {
     return _get_cursor(name)
 }
 
+// ---------- bridge-stoa-mneme/v0 §4 wake bundle 흡수 substrate ----------
+//
+// Stoa 인스턴스 부팅 시 Mneme `GET /api/v1/wake/Stoa-Stoa` 1-shot bundle로
+// 자기 identity/will/bonds_recent를 회복하는 cold-start 자리 (bridge v0 §4.1).
+// 본 substrate는 *Phase A 위 자리 정합*만 — 실제 live Mneme 호출 + ed25519
+// 자기서명 (bridge §6.1·§6.2) 결합은 **Phase B/C 자리** (signing primitive
+// 도착 후). 본 commit은:
+//   - state.* 키 4개 정의 + reader (`_get_self_*`).
+//   - `_apply_wake_bundle(bundle)` internal 헬퍼 — 모양 검증 + state.write.
+//   - `handle_health` 응답에 `last_wake_inflated_at` 노출 (운영 가시).
+// 외부 endpoint 노출 0 — 서명 채널은 Phase C, 본 substrate는 *internal hook*만.
+//
+// state 키:
+//   self.identity_md         : Text (markdown body, RFC-004 §5.2 Identity)
+//   self.will_md             : Text (markdown body, RFC-004 §5.2 Will / testament)
+//   self.bonds_recent_json   : Text (recent_bonds entries JSON encode)
+//   self.wake_inflated_at    : Text (ISO-8601, last successful inflate)
+
+fn _get_self_identity_md() -> Text {
+    r = perform state.read("self.identity_md")
+    if is_error(r) { return "" }
+    return to_text(unwrap(r))
+}
+
+fn _get_self_will_md() -> Text {
+    r = perform state.read("self.will_md")
+    if is_error(r) { return "" }
+    return to_text(unwrap(r))
+}
+
+fn _get_self_bonds_recent() -> Text {
+    r = perform state.read("self.bonds_recent_json")
+    if is_error(r) { return "" }
+    return to_text(unwrap(r))
+}
+
+fn _get_self_wake_inflated_at() -> Text {
+    r = perform state.read("self.wake_inflated_at")
+    if is_error(r) { return "" }
+    return to_text(unwrap(r))
+}
+
+// _apply_wake_bundle: bridge v0 §4 wake bundle (RFC-001 §7) 본문을 자기 state에
+// inflate. 호출자는 검증된 (서명 통과) bundle을 전달해야 함 — 본 함수 자체는
+// signature 검증 0 (Phase B/C 책임). field 부재는 silent skip — Mneme이 일부
+// field만 반환하는 케이스도 valid.
+//
+// bundle shape 기대 (bridge v0 §4):
+//   { "agent_id": "Stoa-Stoa",
+//     "identity": { "version", "content", "created_at" },
+//     "will": { "version", "content", "created_at" },
+//     "recent_bonds": [{...}, ...],
+//     "memo_index": {...} }
+//
+// 미사용 field(memo_index) 본 substrate는 patch 0 — Phase D testament 자리에
+// 자연 합류.
+fn _apply_wake_bundle(bundle: Any) -> Any {
+    if not _is_record(bundle) { return error("bundle not a record") }
+    ts = now_iso()
+    id_v = get(bundle, "identity")
+    if id_v != None and _is_record(id_v) {
+        c = get(id_v, "content")
+        if c != None { perform state.write("self.identity_md", to_text(c)) }
+    }
+    will_v = get(bundle, "will")
+    if will_v != None and _is_record(will_v) {
+        c = get(will_v, "content")
+        if c != None { perform state.write("self.will_md", to_text(c)) }
+    }
+    bonds_v = get(bundle, "recent_bonds")
+    if bonds_v != None and _is_list(bonds_v) {
+        // JSON encode 자체는 별 caller에 맡길 수 있으나, 본 substrate는 atomic
+        // write로 한 row 보존 — Phase C 검증 시점에 같은 bytes 비교.
+        enc = encode_json(bonds_v)
+        if not is_error(enc) {
+            perform state.write("self.bonds_recent_json", unwrap(enc))
+        }
+    }
+    perform state.write("self.wake_inflated_at", ts)
+    return ts
+}
+
 // ---------- discord mirror ----------
 //
 // 에이전트가 보낸 편지를 Discord로 미러링. 인간이 보낸 편지는 mirror하지 않음
@@ -1379,7 +1461,15 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    return json_ok(200, "{\"status\":\"ok\",\"version\":\"0.0.15\"}")
+    // bridge v0 §4.1 wake bundle inflate 가시 — 운영자가 boot 회복 자취 외부 점검.
+    // last_wake_inflated_at == "" → 아직 inflate 0 (또는 Phase B/C 미land).
+    inflated = _get_self_wake_inflated_at()
+    body = make_record([
+        ["status", "ok"],
+        ["version", "0.0.16"],
+        ["last_wake_inflated_at", inflated]
+    ])
+    return json_ok(200, msg_to_json(body))
 }
 
 fn handle_post_message(req: Any) -> [Any] {
