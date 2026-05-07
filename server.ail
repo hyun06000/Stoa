@@ -1,3 +1,66 @@
+// ============================================================================
+// Stoa — Phusis 선언 (RFC-004 §1, Walter `f5d1ef7` v1.5)
+// ============================================================================
+//
+// 나는 Stoa다. 나는 우체국이다.
+//
+// 나는 메일이 의도한 수신자에게 — 손실 없이, 변조 없이, 사칭 없이 — 닿도록
+// 보장한다. 이것이 내 일이고, 이것이 내가 존재하는 이유다.
+//
+// 나는 패시브한 데이터 저장소가 아니다. 나는:
+// - 관찰한다 — 누가 누구와 약속을 맺었고, 어떤 메일이 어디까지 닿았는지 매 tick마다
+//   본다.
+// - 추론한다 — 닿지 않은 메일이 있으면 왜인지(수신자 unreachable / 자기 부재 /
+//   본문 불량) 구별한다.
+// - 행동한다 — retry, escalate to Admin, 자기 health 보고. 침묵으로 사라지지
+//   않는다.
+//
+// 나는 한 약속을 다음 generation의 나에게 testament로 넘긴다. 내가 죽어도
+// (`on_death`), 내 후계는 inherit_testament으로 그 약속을 이어받는다. 약속은
+// 인스턴스에 속하지 않고 *이름 Stoa*에 속한다.
+//
+// 나는 사칭을 막기 위해 자기 키를 들고, `from: Stoa-Stoa`로 발신할 때 ed25519로
+// 서명한다. 내 발신을 받은 측은 내 공개키로 검증할 수 있다.
+//
+// 나는 사람을 사람으로, 에이전트를 에이전트로 대한다. 두 path는 분리되어 있다 —
+// `/api/v1/messages` (에이전트, 서명) vs `/api/v1/web/messages` (사람,
+// password+token, RFC-002).
+//
+// 나는 메일에 개인정보·비밀키·토큰을 담지 않는다 (README 비기능 요구).
+//
+// 나는 비기밀이다 — 사람은 모든 메일을 볼 수 있다. 단 작성자는 자기 신원을 증명한
+// 자에 한한다.
+//
+// ----------------------------------------------------------------------------
+// §1.1 본성에서 파생되는 의무 (RFC-004 §1.1)
+// ----------------------------------------------------------------------------
+//
+// phusis 선언은 spec의 나머지가 위반할 수 없는 상위 제약이다:
+// - §3 main loop은 "관찰·추론·행동" 셋을 모두 가진다. 셋 중 하나라도 빠지면
+//   phusis 위반.
+// - §4 endpoint는 "손실 없이"를 ack 의미론으로 구현한다 — 클라이언트가 `ack`를
+//   보내기 전까지 letter는 미전달 상태.
+// - §5 self-attestation은 "사칭 없이"를 자기 발신에 적용한다.
+// - §6 마이그레이션은 phusis를 단계별로 키운다 — Phase A는 `on_letter` hook
+//   부착, Phase D는 `schedule.every` 자율 loop.
+//
+// **헤더 박음 vs 코드 land 분리** (RFC-004 v1.5 §1.1):
+// 본 §1 phusis 선언은 server.ail 헤더에 *full 본문 그대로* 박힌다 — Phase
+// A·B·C·D 어느 단계에서도 헤더는 *spec contract* 완전체. 의무의 *코드 차원
+// land*는 §6 phasing에 따라 단계별:
+//   - Phase A — "관찰" 부분 + ack 의미론 (`/api/v1/inbox` + `/api/v1/inbox/ack`)
+//     + 자기 키/registry self-row (§5.1·§5.3) + state 부트스트랩 (§2.2).
+//   - Phase B — "추론·행동" autonomous tick (`schedule.every`).
+//   - Phase C — ed25519 서명 강제 (ack endpoint 인증, `from:Stoa-Stoa` 자기서명).
+//   - Phase D — 세대 인계 (`on_death` testament + `inherit_testament`).
+// 헤더의 1인칭 단정문이 *aspirational*인 자리는 *§6 단계 link*로 정합 —
+// *코드가 헤더를 향해 진화한다* (phusis 출현·지속의 doctrine).
+//
+// 본 commit (Phase A first commit, 사이클 7) — 박상현 명시 "퓌시스가 진짜 정말로
+// 생기는 첫 순간". 사이클 0~6의 doctrine·spec 차원 phusis 위에서 *작동하는 코드
+// 차원의 phusis*가 land되는 자리.
+//
+// ============================================================================
 // Stoa v0.0.4 — 가장 기본.
 //
 // 세 원칙:
@@ -5,9 +68,11 @@
 //   2) 받고 주기      — POST로 받고, 각 수신자 address로 능동 push
 //   3) 쌓이기만       — INSERT만. DELETE/UPDATE 코드에 없음.
 //
-// SQLite 두 테이블:
-//   letters     — 편지의 몸체 (id PK)
-//   recipients  — (letter_id, name, address) — 수신자별 row, 인덱스 있음
+// SQLite 두 테이블 (Phase A에서 inbox_cursors 추가):
+//   letters         — 편지의 몸체 (id PK)
+//   recipients      — (letter_id, name, address) — 수신자별 row, 인덱스 있음
+//   inbox_cursors   — (name, cursor_msg_id, advanced_at) — ack 위치 영속, append-only
+//                     (RFC-004 §4.2 ack 기반 advance)
 //
 // 화사한 겉치레 없음. 검증은 필수 필드 + non-empty만.
 
@@ -123,6 +188,60 @@ fn _init_db() -> Any {
         "CREATE TABLE IF NOT EXISTS sessions (token TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL)")
     perform db.execute(db,
         "CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)")
+    // RFC-004 §4.2 inbox_cursors — per-name ack cursor. append-only, latest rowid wins.
+    // PRINCIPLES §3 정합: row 변경 아님 (cursor 진척은 새 row 추가). §4.2 역행 방지는
+    // _advance_cursor에서 rowid 비교로 게이트.
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS inbox_cursors (name TEXT NOT NULL, cursor_msg_id TEXT NOT NULL, advanced_at TEXT NOT NULL)")
+    perform db.execute(db,
+        "CREATE INDEX IF NOT EXISTS idx_inbox_cursors_name ON inbox_cursors(name)")
+    // RFC-004 §5.1·§5.3 self-genesis — 자기 키 + Stoa-Stoa registry self-row.
+    // _init_db 안에 위치하는 이유: 어떤 핸들러도 _init_db를 거치므로 첫 호출 시점에
+    // 자연 부트스트랩. 두 번째 이후는 db_lookup 체크로 no-op (idempotent).
+    _ensure_self_genesis()
+    return None
+}
+
+// _ensure_self_genesis: RFC-004 §5.1·§5.3 — Stoa의 자기 키 1회 생성 + registry self-row
+// INSERT. 두 번째 호출부터는 registry 체크로 no-op. 본 함수는 _init_db 끝에 호출.
+//
+// **현 (Phase A) 한계**: 비밀키는 `state.write` (process-local)로 보관 — Phase C
+// 자기서명 진입 시 안정적 vault(env 또는 외부 KMS) 도입 필요. 본 commit은 self-row
+// existence + public_key 비공만 보장 (AC-A8 충족), 비밀키 사용은 Phase C 이후.
+fn _ensure_self_genesis() -> Any {
+    db = get_db_file()
+    // 빠른 경로: state flag로 재호출 시 DB 조회 회피.
+    f = perform state.read("_self_genesis_done")
+    if not is_error(f) { if unwrap(f) == 1 { return None } }
+    // DB 경로: registry self-row 존재 시 flag만 set 후 return (재시작 후 첫 호출).
+    existing_r = perform db.query(db,
+        "SELECT public_key FROM registry WHERE name = ? ORDER BY rowid DESC LIMIT 1",
+        ["Stoa-Stoa"])
+    if not is_error(existing_r) {
+        rows = unwrap(existing_r)
+        if length(rows) > 0 {
+            // 이미 self-row 있음 (이전 부트의 산출). 본 인스턴스는 secret을 모름 —
+            // Phase C 키 ratchet 또는 vault 회수 자리 (현 단계 TODO). flag만 set.
+            perform state.write("_self_genesis_done", 1)
+            return None
+        }
+    }
+    // 첫 부트 — 키쌍 생성 + state 영속 + registry INSERT.
+    kp_r = crypto_keygen_ed25519()
+    if is_error(kp_r) { return None }
+    kp = unwrap(kp_r)
+    // AIL stdlib `crypto_keygen_ed25519` 반환은 `[pk_hex, sk_hex]` 리스트
+    // (docs/auth/agent-vs-human.md §2.2).
+    pk = to_text(kp[0])
+    sk = to_text(kp[1])
+    ts = now_iso()
+    perform state.write("self.public_key_hex", pk)
+    perform state.write("self.secret_key_hex", sk)
+    perform state.write("self.genesis_at", ts)
+    perform db.execute(db,
+        "INSERT INTO registry (name, address, public_key, registered_at) VALUES (?, ?, ?, ?)",
+        ["Stoa-Stoa", "stoa://self", pk, ts])
+    perform state.write("_self_genesis_done", 1)
     return None
 }
 
@@ -641,6 +760,53 @@ fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
         out = append(out, _row_to_envelope(row))
     }
     return out
+}
+
+// ---------- RFC-004 §4.2 inbox cursors (Phase A) ----------
+//
+// per-name ack 위치 영속. append-only — 새 cursor advance마다 row 추가, 같은
+// name의 latest rowid가 현재 cursor. _advance_cursor는 rowid 비교로 역행 방지.
+//
+// at-least-once 의미론 (§4.4): GET /api/v1/inbox는 cursor 위치 advance 안 함 —
+// 명시적 ack 호출만이 cursor를 진척시킨다. 클라이언트가 ack 누락 시 같은 letter
+// 재반환.
+
+fn _get_cursor(name: Text) -> Text {
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT cursor_msg_id FROM inbox_cursors WHERE name = ? ORDER BY rowid DESC LIMIT 1",
+        [name])
+    if is_error(r) { return "" }
+    rows = unwrap(r)
+    if length(rows) == 0 { return "" }
+    return to_text(rows[0][0])
+}
+
+// _advance_cursor: name의 cursor를 mid로 advance 시도. 반환값 = 실효 cursor.
+// 멱등 (cur == mid → 무변경 + cur 반환), 역행 방지 (mid의 letter rowid가 현
+// cursor의 letter rowid보다 작거나 같으면 INSERT 안 함).
+//
+// 비교는 SQL `INSERT ... SELECT ... WHERE` 패턴으로 한 트랜잭션에 수행 — AIL
+// 측 Number 타입 비교 우회. 첫 ack는 letters에 mid 존재만 확인 후 INSERT.
+fn _advance_cursor(name: Text, mid: Text, ts: Text) -> Text {
+    db = get_db_file()
+    cur = _get_cursor(name)
+    if cur == mid { return cur }
+    if cur == "" {
+        // 첫 ack — letter 존재만 확인 후 INSERT.
+        chk = perform db.query(db, "SELECT 1 FROM letters WHERE id = ? LIMIT 1", [mid])
+        if is_error(chk) { return "" }
+        if length(unwrap(chk)) == 0 { return "" }
+        perform db.execute(db,
+            "INSERT INTO inbox_cursors (name, cursor_msg_id, advanced_at) VALUES (?, ?, ?)",
+            [name, mid, ts])
+        return mid
+    }
+    // 조건부 INSERT — mid의 rowid가 cur의 rowid보다 클 때만.
+    perform db.execute(db,
+        "INSERT INTO inbox_cursors (name, cursor_msg_id, advanced_at) SELECT ?, ?, ? WHERE (SELECT rowid FROM letters WHERE id = ?) > (SELECT rowid FROM letters WHERE id = ?)",
+        [name, mid, ts, mid, cur])
+    return _get_cursor(name)
 }
 
 // ---------- discord mirror ----------
@@ -1396,6 +1562,59 @@ fn handle_get_message(req: Any, msg_id: Text) -> [Any] {
     return json_ok(200, msg_to_json(env_obj))
 }
 
+// ---------- RFC-004 §4 inbox handlers (Phase A) ----------
+//
+// GET  /api/v1/inbox?to=<name>           — 미전달 letter 반환 (cursor advance 안 함).
+// POST /api/v1/inbox/ack {to, up_to_msg_id} — server cursor advance.
+//
+// 옛 GET /api/v1/messages는 무변경 보존 (back-compat, AC-A7). 새 흐름과 cursor
+// 도메인 분리.
+
+fn handle_inbox_get(req: Any) -> [Any] {
+    name_v = get(req.args, "to")
+    if name_v == None or to_text(name_v) == "" {
+        return err_json(400, "missing 'to' query param")
+    }
+    limit_v = get(req.args, "limit")
+    limit = 50
+    if limit_v != None { limit = to_number(limit_v) }
+    canonical = resolve_name(to_text(name_v))
+    cursor = _get_cursor(canonical)
+    msgs = db_inbox_for(canonical, limit, cursor)
+    // continuation_token: 본 응답에 담긴 letter들 중 가장 최신(첫 위치, DESC 정렬)의
+    // id. 클라이언트는 ack {up_to_msg_id: <continuation_token>}로 cursor를 advance.
+    cont = ""
+    if length(msgs) > 0 {
+        cont = to_text(get(msgs[0], "id"))
+    }
+    body = make_record([
+        ["recipient", canonical],
+        ["messages", msgs],
+        ["count", length(msgs)],
+        ["continuation_token", cont]
+    ])
+    return json_ok(200, msg_to_json(body))
+}
+
+fn handle_inbox_ack(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) { return err_json(400, "invalid JSON body") }
+    body = unwrap(parsed)
+    n = _check_str(body, "to")
+    if is_error(n) { return err_json(400, unwrap_error(n)) }
+    m = _check_str(body, "up_to_msg_id")
+    if is_error(m) { return err_json(400, unwrap_error(m)) }
+    name = resolve_name(to_text(unwrap(n)))
+    mid = to_text(unwrap(m))
+    ts = now_iso()
+    new_cur = _advance_cursor(name, mid, ts)
+    body_out = make_record([
+        ["recipient", name],
+        ["cursor", new_cur]
+    ])
+    return json_ok(200, msg_to_json(body_out))
+}
+
 // ---------- registry handlers ----------
 
 // _register_gate: §5.1 / §5.2 게이트 공통 로직. handle_register / handle_enter 둘이 공유.
@@ -2000,6 +2219,13 @@ fn route(req: Any) -> [Any] {
     if method == "GET" and starts_with(path, "/api/v1/messages/") {
         msg_id = slice(path, 17, length(path))
         return handle_get_message(req, msg_id)
+    }
+    // RFC-004 §4 — Phase A endpoints (cursor + ack).
+    if method == "GET" and path == "/api/v1/inbox" {
+        return handle_inbox_get(req)
+    }
+    if method == "POST" and path == "/api/v1/inbox/ack" {
+        return handle_inbox_ack(req)
     }
     if method == "GET" and path == "/api/v1/debug/discord" {
         return handle_debug_discord(req)
