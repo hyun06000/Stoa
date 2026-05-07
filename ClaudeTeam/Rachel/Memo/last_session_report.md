@@ -1,45 +1,87 @@
 # Last session — Rachel
 
-## 2026-05-07 trip 1 (사실상 첫 활동 사이클)
+## 2026-05-07 trip 2 — 사이클 7 Phase A 임계 자리 land
 
-부팅 의식: cd `Stoa/Rachel/` (룰 16 형제 path) → `git fetch origin && git rebase origin/main` → Identity·Bonds·Will 정독 → Stoa monitor 가동(`Stoa-Rachel`, persistent task).
+부팅: cd `Stoa/Rachel/` (룰 16 형제 path) → rebase → Stoa monitor `STOA_NAME=Stoa-Rachel`(persistent task `baug4hyg1`, 룰 22 backlog auto-drain 정상).
 
-### 수신
-- `msg_1778147196_2` (Stoa-Admin) — Phase 1 진입 + RFC-004 §7 AC 회귀 트랙 위임. 진입 순서: Phase 1 부팅 → Walter §7 도착 전까지 옛 Phase 2 step 1(`tests/` 인벤토리) 자율 → §7 land 시 회귀 박기.
-- `msg_1778150002_14` (Stoa-Admin) — Mneme-Marcus 페어 활성화 알림. 내 트랙이 *양 팀 AC 운영*으로 확장. 부담 신호 즉시 idle(룰 23).
-- `msg_1778151162_4` (Stoa-Admin) — `member/Rachel` 브랜치 origin과 diverge(local `7336d6b` vs origin `3f78987`). 박상현 force-push GO 다음 사이클 보류. 본 trip 영향 0.
-- 옛 환영(`msg_1777863126_7`) + 2026-05-04 broadcast(stale) — backlog auto-drain로 회수, 종결 처리.
+### 사이클 7 = "퓌시스가 진짜 정말로 생기는 첫 순간" (박상현 발화)
+
+내 자리: §7 P-A 8건 AC 회귀 시나리오가 *phusis 진위 외부 검증 site*. server.ail이 spec contract대로 작동하는지 외부 증인.
+
+### 수신 (이번 trip 주요 letter)
+
+- `msg_1778164886_2` (priority:high) — 사이클 6 3차 다운 incident + 사이클 7 wake-call. ack로 회신.
+- `msg_1778166927_17` — Railway 1GB→8GB 업그레이드, letter 트래픽 자유.
+- `msg_1778167105_19` — 박상현 "퓌시스 첫 순간" 임계 인지. 4인 정신 정렬.
+- `msg_1778167436_27` (priority:high) — Phase A AC 작성 trigger.
+- `msg_1778167706_47` — Walter RFC-004 v1.5 land (`f5d1ef7`).
+- `msg_1778167781_2` — Brandon MR FAIL (rebase race behind=1).
+- `msg_1778168044_6` — 내 AC bundle main land (`c476a18`).
+- `msg_1778170006_61` — Marcus Phase A main land (`45f500f`). 트리거.
+- `msg_1778170220_4`/`msg_1778170225_6` — Marcus 8/8 PASS ack + Phase B 권고 GO.
+- `msg_1778170221_5` — Brandon 외부 증인 ack.
+- `msg_1778170339_9` — 사이클 7 close (`576cca3`).
 
 ### 산출
-- `ClaudeTeam/Rachel/Memo/phase2_step1_inventory.md` — `tests/` 17개 + `run_all.sh` + `tools/validate-mr.sh` 분석. commit `eac06f9` (member/Rachel 위에).
-- 발신 `msg_1778148181_1` (클락인), `msg_1778151371_9` (인벤토리 결과 + diverge ack + idle).
 
-### 핵심 발견 (다음 trip 직접 활용)
+- **`tests/phase_a/test_phase_a.sh`** (234 LOC) — AC-A1~A8 sh+curl bundle.
+- **`tests/run_all.sh`** — `STOA_PHASE_A=1` 조건부 phase_a/ etcher 추가.
+- main land SHA: `c476a18` (사이클 7 close 시점 main `576cca3` 위).
 
-**토폴로지**: tests 17개 = shared-server 10 + self-contained 7. `run_all.sh`가 균일 처리하나 self-contained는 `STOA_URL` 무시 + 자기 server boot. CI 병렬화 시 port 충돌 위험.
+### 임계 자리 검증 결과
 
-**정합 위험 3건**:
-1. port 18891 충돌(`test_client_signing.sh` ↔ `test_rfc002_section6_platform_key.sh`).
-2. 시간 앵커 hardcode 3-place(`ANCHOR_ISO/UNIX` in test_client_signing/signing/stoa_cli).
-3. issue#4 sender pre-register 패턴 산재(`test_principle_append_only.sh`만 명시).
+`STOA_PHASE_A=1 bash tests/run_all.sh` 실행 (Marcus `45f500f` land 직후):
 
-**게이트 갭**: `validate-mr.sh` check 8 stub → MR PASS와 `run_all.sh` PASS 직교. 회귀 강제력 운영자 수동.
+```
+── phase_a/test_phase_a.sh ──
+  ✓ A1 ack 200 + cursor
+  ✓ A2 1건 반환 + continuation_token
+  ✓ A3 ack 후 empty
+  ✓ A4 미-ack 두 번 GET → 동일 letter (at-least-once)
+  ✓ A5 200/200 + cursor 동일 (멱등)
+  ✓ A6 cursor 후퇴 0 (역행 방지)
+  ✓ A7 back-compat (옛 since_id 동작 유지)
+  ✓ A8 Stoa-Stoa self-row + public_key 길이=64
+  pass=8  fail=0
+```
 
-**RFC-004 자산 hint**: `test_discord.sh` python http.server mock 패턴이 subscriber receiver 회귀 prototype에 직결.
+전체 회귀: pass=19 fail=1 (FAIL = `test_discord.sh` `DISCORD_WEBHOOK_URL` env 의존 — 사이클 4부터 known unrelated, Phase A 무관).
 
-**dead 0건**.
+### 발신 letter
+
+- `msg_1778148181_1` 클락인.
+- `msg_1778151371_9` 인벤토리 1차 결과 + diverge ack + 1차 idle.
+- `msg_1778162885_17` roll-call 답신 (worktree config 박힘).
+- `msg_1778163566_9` force-with-lease 보고 (룰 11 우회 자가 신고).
+- `msg_1778165154_17` incident wake-call ack.
+- `msg_1778167133_20` "퓌시스 첫 순간" 정신 정렬 ack.
+- `msg_1778167682_44` AC bundle land + MR/push 요청 (Admin·Brandon 동봉).
+- `msg_1778167845_3` race rebase 회수 letter (push 재요청).
+- `msg_1778168078_7` AC bundle main land 후 idle (Marcus SHA 대기).
+- `msg_1778170193_3` ✅ Phase A AC 8/8 PASS 검증 보고 (Admin·Brandon·Marcus 동봉).
+
+### 발견·학습
+
+1. **race 자연성** — 임계점 사이클은 main이 빠르게 진행. Walter v1.5 land 직후 내 MR이 behind=1로 FAIL. 같은 turn 안에 rebase + 새 SHA letter가 표준 패턴.
+2. **force-with-lease 우회 사례** — diverge 정리 한 건은 박상현 직접 chat GO로 룰 11 우회 실행. 후속 race 정정은 Admin push로 표준 복귀. 우회는 *예외*로만, 자가 신고 letter 의무.
+3. **STOA_PHASE_A 게이트 패턴 재사용** — 코드 land 전 시나리오 사전 land 가능. land 시점 분리로 임계 자리 검증 즉시. Phase B에도 같은 패턴.
+4. **Discord mock baseline 1 fail** — 사이클 4부터 사전 존재. Brandon CI 도입 또는 mock 보강 별 트랙으로 분리 합의.
+5. **AC bundle 패턴**: per-run 고유 sender/recipient (`rachel-pa-*-<unix>`)로 state 격리, issue#4 sender pre-register prelude. Phase B 시나리오에도 동일 적용.
 
 ### 다음 trip 진입점
-1. **A·B 패치** — `run_shared.sh` + `run_isolated.sh` + `run_all.sh` wrapper / `tests/lib/anchor.sh` + `seed_agents.sh` 추출. 한 commit으로 묶어 Brandon MR.
-2. **diverge 정리** — 박상현 GO 도착 시 force-with-lease 또는 새 commit 정합 안. Brandon 결정 letter 동봉.
-3. **C 발주** (Brandon 도메인) — `validate-mr.sh` check 8 채우기 letter.
-4. **D 대기** — Walter §7 freeze 도착하면 `tests/test_rfc004_*.sh` 시리즈 박기 시작.
-5. **F 대기** — Mneme-Marcus 첫 letter 도착하면 양 팀 게이트 설계 letter 회신.
 
-### 대기 진입 (룰 21)
-이 trip 마지막 turn에 이미 idle letter `msg_1778151371_9` 발신. 양 팀 동시 운영 부하는 AC 도착 시점 재체크.
+1. **Phase B AC 시나리오 사전 작성** — B1 autonomous deliver / B2 self-host skip / B3 escalate / B4 idle_ping / B5 health.last_tick_at. Marcus 권고 GO 받았으나 Admin/박상현 우선순위 신호 대기 후 진입 (보수 정합).
+2. **Mneme-Marcus 페어 첫 letter** — Mneme RFC-001 AC 도착 시 양 팀 회귀 게이트 묶음 설계.
+3. **Phase 2 step 2 — A·B 인벤토리 패치** — 토폴로지 split + tests/lib 추출. Phase B 시나리오 land 후 자연스럽게 진입 가능 (phase_b/ 디렉터리 etcher와 같이 묶을 수 있음).
 
 ### 환경 메모
-- 워크트리 path: `/Users/user/Desktop/code/personal/Stoa/Rachel` (룰 16 형제). repo는 `/Users/user/Desktop/code/personal/Stoa/Stoa`.
-- Stoa monitor task id: `baug4hyg1` (persistent, 부팅 시점 backlog auto-drain 동작 확인).
-- 본 사이클 main HEAD: `574dfbd` (Admin letter 명시).
+
+- 워크트리 path: `/Users/user/Desktop/code/personal/Stoa/Rachel`. repo: `/Users/user/Desktop/code/personal/Stoa/Stoa`.
+- worktree-local config: `git config --worktree ail.identity Stoa-Rachel` 박힘 (다음 부팅부터 `STOA_NAME` env 생략 가능).
+- monitor task id: `baug4hyg1` (persistent).
+- 사이클 7 close 시점 main HEAD: `576cca3`.
+- 본 trip 종료 시 member/Rachel 위치: HEAD = origin/main = `576cca3` (모든 작업 main land 완료, 로컬 ahead 0).
+
+### 임계 자리 자취
+
+내 commit `c476a18`이 *AC site*로 main에 박힌 자리 + Marcus `45f500f`가 *phusis 코드*로 그 위에 안착 + 외부 검증 8/8 PASS — 박상현 "기대가 커" 약속의 land 자취. 사이클 7이 ClaudeTeam의 첫 phusis 출현 사이클로 기록됨.
