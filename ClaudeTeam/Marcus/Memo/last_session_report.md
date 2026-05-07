@@ -1,5 +1,84 @@
 # Last session report — Marcus
 
+**세션**: 2026-05-08 session 7 (사이클 8 — Phase A hardening + bridge §4 substrate + Phase B WIP archive).
+
+## 종료 시점 상태
+- **member/Marcus = origin/main = `3f35732`** (Marcus bridge-v0 §4 substrate land 후 ahead=0).
+- **WIP 브랜치 `wip/phase-b-entry-main` = `2b06649`** — Phase B `on_birth`/`on_tick`/observe·reason·act 본체. server.ail +272 / -1, *member/Marcus 미land*. 박상현 신호 "거기까지 — 아카이빙하고 다음 세션 이어서" 직후 보존.
+- **Tests** (Phase A 위, Phase B 미실행): pass=20 fail=1 (test_discord baseline).
+- **AIL local upgrade**: `ail-interpreter==1.72.2` 설치 완료. `ail version` cmd가 hardcoded 1.69.1 표시(upstream `__init__.py:10` 미bump 자취 — pip show는 정확). 실제 코드는 1.72.2 — `ail run` + `evolve` schedule.every 작동 로컬 검증 완료.
+
+## 본 세션 land 자취 (main 위)
+
+1. **클락아웃 commit `bc617a9`** — 사이클 7 마감 (Admin cherry-pick).
+2. **`6d08363` Phase A hardening** — `_advance_cursor` recipient 매칭 게이트 + 회귀 R1·R2.
+3. **`3f35732` bridge v0 §4 substrate** — wake bundle state.* 키 4개 + readers + `_apply_wake_bundle` internal helper + handle_health `last_wake_inflated_at` 노출 (version 0.0.15→0.0.16).
+
+## Phase B 작업 자리 (WIP `2b06649`, member/Marcus 미land)
+
+### 완료
+- env readers (TICK_SEC=5 / IDLE_PING_INTERVAL_S=1800 / ESCALATE_AFTER_FAIL=3 / DELIVER_RETRY_MAX=5 / STOA_SELF_ORIGIN).
+- `_emit_self_letter` — from=Stoa-Stoa INSERT (무서명, Phase C에서 ed25519 자기서명 추가).
+- `_admin_address` — registry에서 Stoa-Admin address 회수.
+- `_read_delivered` / `_write_delivered` / `_delivered_status` / `_delivered_attempts` — state `delivered.<name>.<mid>` record 헬퍼.
+- `_maybe_escalate` — alert (attempts == ESCALATE_AFTER_FAIL) + final (attempts == RETRY_MAX). Stoa-Admin escalate self-loop 차단.
+- `_pump_subscriber` — per-letter deliver/skip/fail. self-host skip + retry_max cap + delivered status idempotent. cursor advance 안 함 (§4.2 정합).
+- `_autonomous_observe` — `health.last_tick_at` iso 갱신.
+- `_autonomous_act` — `db_list_registry()` 순회 pump + idle_ping 검사.
+- `on_birth` — `schedule.every(TICK_SEC)` 등록.
+- `on_tick` — observe + act.
+- evolve `effects` 리스트에 `schedule.every` 추가.
+
+### 미완료 (다음 세션 첫 행동)
+1. **WIP 회수**: `git cherry-pick wip/phase-b-entry-main` 또는 본 commit을 base로 `git reset --soft`로 다듬기.
+2. **`requirements.txt` bump** — `ail-interpreter>=1.72.2`.
+3. **`handle_health` 응답에 `last_tick_at` 추가** (RFC §10.2 / AC-B5 명시 surface).
+4. **Rachel `tests/phase_b/test_phase_b.sh` 실행** (`STOA_PHASE_B=1`):
+   - AC-B1 autonomous deliver
+   - AC-B2 self-host skip
+   - AC-B3 escalate (alert + final)
+   - AC-B4 idle_ping (`STOA_IDLE_PING_INTERVAL_S=4` fast)
+   - AC-B5 health.last_tick_at advance
+5. **회귀 0 확인** — Phase A AC + recipient-gate + wake-bundle-substrate.
+6. **commit + MR Brandon + idle Admin**.
+
+### 다음 세션 첫 명령
+
+```
+cd Stoa/Marcus
+git fetch origin
+git rebase origin/main
+git cherry-pick wip/phase-b-entry-main
+# server.ail 추가 patch (handle_health last_tick_at)
+vim requirements.txt  # >=1.72.2
+STOA_PHASE_A=1 STOA_PHASE_B=1 bash tests/run_all.sh
+git add ... && git commit -m "feat(rfc-004): Phase B autonomous tick — observe·reason·act"
+```
+
+## Stoa letter 발신 자취 (본 세션)
+
+- 출근 `msg_1778191195_9` Admin
+- 블로커 `msg_1778191329_18` (β+γ hybrid 권고)
+- Brandon MR Phase A hardening `msg_1778191955_0` (→ land)
+- idle 1 `msg_1778191969_1` Admin
+- Brandon MR bridge substrate `msg_1778196134_17` (→ land)
+- idle 2 `msg_1778196149_18` Admin
+- (다음 turn) pause letter Admin
+
+## 학습
+
+- **AIL 1.72.2 + evolve schedule.every 검증 패턴**: `on_birth`에서 `schedule.every(N)` 등록, runtime이 `on_tick(state)`을 N초 주기 발화. `entry main` 별도 declaration 불필요(reference card "entry main" 패턴은 `ail up` 자기 self-tick 용도이고, `evolve` 환경은 `on_tick` hook이 자연 자리). 로컬 `ail run` 환경에서도 즉시 작동 확인.
+- **AIL `__version__` 표시 mismatch**: `pip show ail-interpreter` 1.72.2이지만 `ail version`은 1.69.1 표시. upstream `ail/__init__.py:10` 하드코딩 미bump. 실제 코드는 1.72.2 그대로(schedule.every 동작 검증 완료). AIL 팀 issue 후보 — 다음 세션에서 보고 가능.
+- **β+γ hybrid 결정 자취**: schedule.every 미작동 발견 → priority:high 블로커 letter → arche 권고 + Walter 동의 + 박상현 GO via arche → AIL Telos가 1.72.2 cut → Phase B 진입. 본능 가드(룰 13) "막히면 Admin"이 한 사이클 안에 정확히 작동.
+- **WIP 아카이빙 패턴 첫 실전**: 박상현 "거기까지" 신호 직후 *member/Marcus 미오염* 보존. wip/phase-b-entry-main 별 브랜치에 commit. 다음 세션 cherry-pick 회수 + Brandon MR. main 브랜치는 깨끗(land 0).
+
+## 클락아웃 직전 (능동 트리거 — 규칙 15)
+- 박상현 명시 "아카이빙하고 다음 세션 이어서" 신호 직접 수신.
+- 본 세션 land 자취 + WIP 자취 + 다음 세션 entry point 모두 본 보고에 박힘.
+- Admin pause letter 발사 후 idle.
+
+# (옛 session 6 보고)
+
 **세션**: 2026-05-08 session 6 (Phase A first commit — 퓌시스 출현 임계 자리).
 
 ## 종료 시점 상태
