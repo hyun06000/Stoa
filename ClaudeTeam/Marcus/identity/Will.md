@@ -20,17 +20,39 @@
 - **Q1 §6.5 hotfix — Web UI POST 차단** (`70af357`, session 4). handle_post_message 진입점 `_is_human_bound + not has_sig_claim → 401 'unauthorized envelope'` 분기. discord_users.stoa_name index. AC-13.
 - **Bug B — `?since_id=0` 0건 반환** (`d3230ca`, session 4). db_inbox_for/db_all_letters에 `since_id == "" or "0"` 동등 처리. wake_monitor 첫 부트 fallback 호환. AC-14.
 - **Session 4 main land (`88c7326`)**: Admin이 Q1+Bug B+dual-run letter 4 commit FF merge. main HEAD 도달.
+- **Step 5 — §11 client.ail send_letter signing** (`0ac1e37`, session 5). client.ail에 _esc/_sort_recipients_by_name/canonical_letter (server.ail byte-exact mirror) + handle_post_send 서명 분기. CLIENT_SECRET_KEY env. tests/test_client_signing.sh AC-C1~C3.
+- **issue#1 simplified-body 500 hotfix** (`ba36a41`, session 5). encode_json + slice 첫 글자로 _is_record/_is_list helper. validate_envelope 4곳 shape guard. tests/test_issue1_simplified_body.sh I1-1~7.
+- **issue#2 push timeout 500 hotfix** (`2d5f8c1`, session 5). _push_one + notify_discord에 attempt+try (perform 예외 → Result-error fallback). 응답·작업 분리. tests/test_issue2_push_timeout.sh I2-1~3.
+- **issue#4 sender registry gate Phase A** (`177510e`, session 5). handle_post_message db_lookup(from_name) None → 400 (impersonation 방어). test_principle_*/issue3/issue1 4건에 발신자 사전 등록 prefix. tests/test_issue4_sender_gate.sh I4-1~4.
+- **stoa-cli internal Python tool** (`7e2459c`, session 5). community-tools/stoa-cli/. keygen·canonical·sign·verify·send. canonical_letter Python mirror byte-exact. tests/test_stoa_cli.sh C1~C5.
 
 ## Open (다음 세션의 내가 풀어야 할 것)
 
-### 미해소 차단 — Walter 회신 대기
-- **AC-11 fixture 정합성 (RFC §12 line 644)**: 필드 *내부* `:` escape 누락 — fixture가 typo (해석 A) vs `:` escape rule이 잘못 (해석 B). Step 4b는 (A) 가정으로 land. Walter `msg_1777833352_3` 회신 보고 (A) 확정 시 RFC errata만, (B) 확정 시 server.ail _esc + Step 2/3 verify 흐름 재검증 + AC-11 expected 갱신.
+### Stoa 단일 채널 (룰 19 cutover `df345e6`)
+- 파일시스템 letter 폐기. 모든 letter는 Stoa POST. monitor 두 개 (Stoa wake_monitor + 옵션 fs polling) 가동.
+- inbox 디렉터리는 main에서 git rm — 부트스트랩/fallback 한정으로만 부활.
 
-### 다음 RFC sections
-- §11 client side (`client.ail` 서명 보강) 미완 — Walter Memo §6.6 패턴 (`crypto_sign_ed25519` Result[Text] unwrap).
-- RFC-002 (Walter 진행 중) 입력 도착 시 implementation 트랙.
+### 룰 21 idle letter 정착
+- MR 발송 turn 끝에 idle letter 박는 패턴 — 한 turn 비용으로 명시 신호 유지. 잊으면 Admin이 alive·작업 중·사망 셋 구별 못 함.
 
-**임무 = `server.ail` RFC-001 v1.2 이어가기.** Admin 단계별 작은 MR 원칙 유지. 거대 MR 금지.
+### 룰 23 분담 — 5인 팀 (Admin, Brandon, Walter, Marcus, Rachel)
+- Rachel QA·CI 합류 (`77df3c0`). 다음 사이클 부하 가중 신호 발견 시 Admin이 박상현 결정 letter 발행.
+- 본 세션 issue#4 라우팅이 분담 doctrine 첫 실행 — Walter/Rachel과 함께.
+
+### 다음 트랙 (대기)
+- Brandon handle_register sweep (issue#4와 일부 겹침, 별 사이클 후보).
+- AIL#6 Phase 0 grandfather impersonation 결정 후속.
+- RFC-002 §6 attestation flow 다음 트랙 (Walter 진행 중).
+- §11 client-side platform attestation (Step 6).
+- 룰 10 doctrine 보강 patch — 외부 도구 영역(stoa-cli·tests·tools·community-tools/) Python/sh 허용 한 줄 land 후보.
+- Railway 메모리 부족 (사용자 backlog 등재) — Admin 결정 사이클 사안.
+
+### 입력 (변경 금지)
+- Walter Memo (RFC-001 v1.2.1, RFC-002 진행 중).
+- reference card (AIL v1.8+).
+- server.ail / client.ail / stoa-cli / tests/.
+
+**임무 = Admin 위임 받는 server·client·tools 영역 implementation.** 단계별 작은 MR 원칙 유지.
 
 ### 입력 (변경 금지, 읽기만)
 - [`ClaudeTeam/Walter/Memo/rfc-001-identity-and-signing.md`](../../Walter/Memo/rfc-001-identity-and-signing.md) — v1.2 frozen, 752 lines. 모든 결정은 여기에 있음. **추측 금지.**

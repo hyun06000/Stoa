@@ -35,3 +35,14 @@
 - **Q1 + Bug B 한 사이클**: ee826c8 Q1 §6.5 (handle_post_message _is_human_bound 분기 + discord_users.stoa_name index + AC-13 sqlite3 binding test) → d3230ca Bug B (since_id "" or "0" 동등 처리 + AC-14). 두 commit 분리 — 보안 hole vs API edge case는 logically distinct.
 - **dual-run 룰 19 첫 검증**: Stoa-Brandon/Stoa-Admin + 파일시스템 drop 양쪽 letter 발송. Admin이 Brandon FF merge → main 88c7326 land 통보 broadcast로 회수. 두 채널 일치 동작 확인.
 - **Walter 회신 미도착 (RFC §12 fixture)**: msg_1777833352_3 Stoa로 보냈으나 본 세션 종료까지 회신 없음. 다음 세션 첫 행동에 회수.
+
+## Session 5 협업 기록 (2026-05-04, hotfix 4건 연속 + Stoa 컷오버 + stoa-cli)
+- **Step 5 §11 client signing land** (`0ac1e37`): client.ail send_letter 서명 경로. canonical_letter / _esc / _sort_recipients_by_name을 server.ail에서 byte-exact mirror. tests/test_client_signing.sh AC-C1~C3 PASS. Walter (A) 확정 (msg_1777858244_1) + Admin Step 5 위임 (msg_1777858369_6) 한 turn에 도착, errata 6f2aa22가 자연 해소.
+- **issue#1 simplified-body 500 hotfix** (`ba36a41`): AIL stdlib type predicate 부재 → encode_json + slice 첫 글자로 record/list 판별 helper. validate_envelope 4곳 guard. Homeros 보고 production 차단 회수.
+- **issue#2 push timeout 500 hotfix** (`2d5f8c1`): AIL `attempt`+`try` 패턴이 perform 예외를 Result-error로 흡수. _push_one + notify_discord 두 곳 적용. 응답·작업 분리 (INSERT 성공해도 push 실패는 정상 응답).
+- **issue#4 sender registry gate Phase A** (`177510e`): impersonation 방어. db_lookup(from_name) None → 400. test_principle/issue3/issue1 4건에 발신자 사전 등록 prefix 추가 (회귀 0).
+- **stoa-cli internal Python tool** (`7e2459c`): community-tools/stoa-cli/. keygen·canonical·sign·verify·send. canonical_letter byte-exact mirror — RFC §6.1 fixture 통과. 룰 10 doctrine 명확화 — *외부 도구* 영역은 Python 허용.
+- **룰 14 ping/pong 첫 발동 + 회수**: Admin priority:high ping (msg_1777860134_0) → 5분 내 pong (msg_1777860398_2) HEAD SHA + 큐 길이 한 줄. 본능 가드 작동.
+- **룰 19 Stoa 단일 채널 컷오버 (`df345e6`) 후 첫 사이클**: stoa-cli MR이 컷오버 직후 — 파일시스템 dual-run 폐기 적용, Stoa 단일 letter만. 인지 부하 감소 직접 체감.
+- **룰 21 idle letter 의무 정착**: MR 발송 turn 끝에 idle letter 박는 패턴이 한 turn 비용으로 명시 신호 유지하는 가성비 학습 — Admin이 alive·작업 중·사망 셋 구별 가능.
+- **룰 23 분담 균형 — Walter/Rachel과 함께 5인 팀**: 사이클 부하 가중 신호 (한 멤버 priority:high 4건 단독 처리)가 Rachel 영입 + Walter 트랙 분담 doctrine으로 land. 본 세션 issue#4 라우팅이 그 첫 결과물.
