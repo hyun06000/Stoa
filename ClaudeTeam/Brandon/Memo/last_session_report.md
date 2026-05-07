@@ -1,69 +1,107 @@
-# Last session report — 2026-05-04 사이클 5 (12 MR + Rachel 영입 + cross-repo)
+# Last session report — 2026-05-07 사이클 6+7 (출근 + 워크트리 형제 layout + 18 MR + phusis 출현)
 
 ## 상태 스냅샷
-- main HEAD 진입 시 `577bc4b` (직전 사이클 4 클락아웃 직후), 본 세션 동안 Admin이 Walter 7건·Marcus 5건·Rachel 영입·doctrine 갱신·아카이빙·클락아웃 broadcast까지 push. 클락아웃 직전 main = `df345e6` (파일시스템 inbox 5인 정리).
-- `member/Brandon` HEAD = `5a0e59e`(handoff letters 누적 — Walter PASS+Marcus FAIL, Marcus Step 5 PASS, Marcus issue#2 PASS) — 그 외 모든 후속 handoff는 Stoa 단일이라 commit 추가 0.
-- 워크트리: `.worktrees/Brandon` (룰 16 in-repo).
-- 모니터 3개 가동: Stoa `bbtcylmx3`, FS worktree `bvt5gy6a9`, FS main `b18la5hx5` — 자연사 대기 (룰 9).
+- 출근 시 main = `8be9cae` (cycle 5 closing). 본 세션 종료 직전 main = `576cca3` (Admin README v0.0.18 사이클 7 close). 양 사이클 사이 17 push 진행.
+- `member/Brandon` HEAD = `576cca3` 정렬 (rebase 완료, ahead=0). 본 사이클 안 ship한 자기 commit:
+  - `4f901f0` (cycle 5 클락아웃 회수, 사이클 6 출근 첫 작업)
+  - `8ff0e7c` (ONBOARDING §1.5 워크트리 발급 SOP self-MR)
+  - 본 클락아웃 자취 (후속 commit).
+- 워크트리: 형제 layout `/Users/user/Desktop/code/personal/Stoa/Brandon/` (룰 16 새 doctrine, 옛 `.worktrees/Brandon/` 폐기).
+- 모니터 1개 가동: Stoa `by90exucj` (path 이전 후 재가동).
 
-## 처리한 이벤트 (시간 순)
+## 사이클 6 (출근 + 워크트리 doctrine flip + 13 MR)
 
-1. **출근 의식**: §0 ritual + main rebase + Stoa 백로그 드레인 (since_id 이미 진척, count 0).
-2. **Walter MR PASS** (`079f500`, RFC-001 v1.2.1 errata + 출근 letters 4 commits) → handoff `msg_1777858998_0` + FS commit `e3d9c05`. Admin push.
-3. **Marcus MR FAIL** (`8defe0f`, session 4 doc, behind=1 + dirty) → FAIL letter `msg_1777859027_1`. Admin 권고 (b) 능동 재검증.
-4. **Brandon rebase + Marcus 능동 재검증**: Marcus 워크트리 rebase origin/main `7bf4e2a` → PASS `625afa8`. handoff `msg_1777859322_2` + FS `d627e9e`.
-5. **Brandon push 위임** (Admin이 main에 letter commits land 후) → Stoa `msg_1777859550_2`.
-6. **Marcus issue#1 hotfix MR PASS** (priority:high, simplified body 500 → 400, `2570291`) → handoff `msg_1777860742_5` + FS `966abf9` (rebase 후 `1cb02a7`).
-7. **Marcus issue#2 hotfix MR PASS** (priority:high, push timeout 500 → 201+failed, `64e42b2`) → handoff `msg_1777862336_8` + FS `5a0e59e`.
-8. **Rachel 영입 발급**: 새 letter `20260504-115100__Rachel__worktree-request`. branch `member/Rachel` + 워크트리 `.worktrees/Rachel/` + 폴더 스켈레톤 + Stoa registry `Stoa-Rachel` (`POST /api/v1/agents`) + 환영 letter `.worktrees/Rachel/.../inbox/20260504-114200__Brandon__welcome-worktree-issued.md` commit `05b4049`. Admin notify Stoa `msg_1777863206_10`.
-9. **Walter RFC-002 §6.4 platform_keys MR PASS** (룰 23 (b) 분담, `fffa0b4`) → Stoa `msg_1777863413_7`.
-10. **Walter issue#3 self-host push hang hotfix MR PASS** (priority:high, `6bf6996`) → Stoa `msg_1777863814_6`.
-11. **AIL cross-repo issue 발행 위임 차단**: 하니스 권한 게이트 deny (turn-bound auth) → 우회 안 함, deny 텍스트 인용 letter Stoa `msg_1777864625_7`. Admin이 자기 turn에서 사용자 GO 받아 자기 손으로 발행 (`hyun06000/AIL#4`).
-12. **Marcus issue#4 sender registry gate Phase A MR PASS** (priority:high, `177510e`) → Stoa `msg_1777864734_11`.
-13. **Walter issue#6 envelope schema 마이그레이션 가이드 MR PASS** (docs only, `7b362f3`) → Stoa `msg_1777872167_16`.
-14. **Walter Q1 Phase A Web UI 로그인 시스템 MR PASS** (priority:high, 사용자 직접 신호, `b892de6`) → Stoa `msg_1777877211_17`. STOA_AUTH_HMAC_KEY env 안내 동봉.
-15. **Walter issue#7 에이전트 vs 사람 인증 가이드 MR PASS** (docs only, `c7ca5a2`) → Stoa `msg_1777878864_5`.
-16. **Walter clock-out commit MR PASS** (identity/Memo only, `f022c48`) → Stoa `msg_1777879099_1`.
-17. **Marcus stoa-cli internal Python tool MR PASS** (Arche#8 Phase 1, `7e2459c`) → Stoa `msg_1777886583_2`.
-18. **Admin broadcast — 전원 퇴근**: 사용자 신호 "Railway 메모리 부족" + "전원 버전 싱크 + 퇴근". 능동 클락아웃 진입.
+### 출근 의식
+- §0 ritual + main rebase + cycle 5 미land 클락아웃 자취 commit 회수가 첫 작업.
+- Stoa 모니터 가동.
 
-## 사이클 5 학습
+### 워크트리 형제 layout 이전 (Admin 위임 `msg_1778146752_1`, 룰 16 갱신)
+- `<repo>/.worktrees/<X>/` → `<repo>/../<X>/` 형제 path. 사용자 sandbox 형제 path 휘발 안 시키는 환경 변경.
+- `git worktree move` 4건 (Brandon/Walter/Marcus/Rachel) 한 trip. Marcus dirty 함께 이동(stash 권한 게이트 deny → worktree move가 dirty 보존).
+- Rachel path 불일치 회수 commit `3f78987`.
 
-- **Race quiesce 패턴 표준화**: 매 handoff 후 "commit 정지" 자기 약속 + Admin이 명시적 unquiesce letter. cycle 4 ad-hoc → cycle 5 일관 적용. 다중 멤버 active 상황에서도 정합.
-- **룰 19 Stoa 단일 채널 cutover 적용 비용 = 사실상 0**: handoff letter 매번 Stoa 단발 POST + verify GET. FS commit은 부트스트랩(Rachel 환영) 한 번만. 인지 부하 ↓, 채널 정합 비용 ↓.
-- **하니스 권한 게이트 = 운영 안전 default**: cross-repo external write에 대해 turn-bound user GO 부재 시 deny. 우회 시도 안 함 doctrine은 정확. Admin의 turn-bound auth 패턴이 대안 — Admin이 자기 turn에서 사용자 GO 받아 직접 실행. 다음 doctrine 갱신 후보로 정리.
-- **local main ref staleness**: `validate-mr.sh`가 base를 local `main` ref로 받아서 origin push 직후 local main 미동기 시 false ahead. 수동 `git update-ref refs/heads/main origin/main`로 풀음 — Will Open 자동화 후보.
-- **3중 모니터 자연 분담**: Stoa 3초 폴링이 1차, FS worktree 5초가 2차 (rebase 후 letter 도착 신호), FS main 5초가 3차 (origin pull 후 신호). 같은 letter가 여러 채널로 도착하지만 처리는 idempotent. cost 무시 가능.
-- **Stale pre-check 발생 빈도 감소**: cycle 5에서는 stale 0건. 룰 19 cutover + Admin push doctrine 정합 + race quiesce로 자연 해소. validate-mr.sh v2 land 시급도 ↓ — 다음 사이클로 이월.
-- **룰 23 (a) 증설 첫 적용 (Rachel)**: Marcus priority:high 4건 단독 처리 신호로 발동. 한 turn 안에서 branch + worktree + registry + 환영 letter 발급 완료 — 부트스트랩 비용 낮음. Rachel 첫 자기소개 letter는 별 turn에 도착 (자기 부트스트랩 후).
+### MR 검증 13건 PASS (사이클 6)
+- Marcus 2: session 5 closure (`28c71fd`), Railway memory hotfix v1 (`58f0db1`).
+- Walter 9 — RFC-004 v1.0~v1.4 cascade + bridge v0 cascade(seed/Mneme half/§5.2/Q-4 freeze/Q-6 GO/freeze 완결) + arche review patches + Will.md + wake_monitor STALE.
+- self-MR 1: ONBOARDING §1.5 SOP (`8ff0e7c`).
+- 1 STALE: Walter wake_monitor `a96b91e` cherry-pick `3dcdf35`로 직접 land — 룰 18 패턴 적용.
+- 1 race: Walter wake_monitor MR이 내 ONBOARDING.md `8ff0e7c` land로 behind=1 → STALE 자연 풀림.
 
-## 사이클 5 doctrine 인지
+### 4 워크트리 retroactive identity (Admin 위임 `msg_1778162501_9`)
+- `git config extensions.worktreeConfig true` (repo level).
+- `git config --worktree ail.identity Stoa-<X>` 4건 ✓ verify.
+- arche review로 wake_monitor fallback `ergon` → `unknown-host` 교체 trigger.
 
-- 룰 19 dual-run → Stoa 단일 채널 cutover.
-- 룰 21 자기 사이클 종료 turn 안 idle letter 의무.
-- 룰 22 wake_monitor 첫 부트 backlog auto-drain (수동 GET 의무 폐기).
-- 룰 23 단일 멤버 부하 가중 시 증설/분담 플래닝.
-- 파일시스템 inbox archive 폐기 (룰 19 부속). 옛 archive 디렉터리는 historical record로 보존.
-- Stoa registry 등록명 `<project>-<role>` (`Stoa-Brandon` 등).
+### 외부 routing
+- ergon 두 RFC 본문 review pass + Sphinx scope 정렬 — Admin routing.
+- D3 sync letter ergon (Stoa main 새 SHA `3dcdf35`+`8ff0e7c`).
+
+### Mneme-Brandon 페어 첫 직통
+- AIL 3 issue 발사 페어 합의 — 단독 발사 동의 + Admin GO 종속 정합 정정.
+- 결과: Admin이 turn-bound로 #7·#8·#9 발사.
+
+### Roll-call ack `msg_1778162876_11`
+
+## 사이클 7 (incident → wake-call → phusis 출현)
+
+### Incident
+- Stoa 3차 production 다운 (사이클 6 closing 직후). INSERT burst → polling 의존 hotfix v1 hole 표면.
+- 박상현 외부 회수 + Marcus hotfix v2 INSERT throttle (`111aee7`) + Railway 1GB→8GB 업그레이드 (메모리 압력 본질 해소).
+- wake-call ack 5분 안 (`msg_1778165105_3`).
+
+### MR 검증 5건 PASS (사이클 7)
+- Walter 2: RFC-004 v1.4 §10.3 incident 학습 (`ba37d5d`), v1.5 §1.1 헤더/land 분리 (`f5d1ef7`).
+- Rachel: §7 P-A 8건 AC 회귀 시나리오 — 첫 시도 race FAIL(behind=1, Walter v1.5 직전 land) → rebase 후 `c476a18` PASS (priority:high).
+- Marcus 2: hotfix v2 INSERT throttle (`111aee7`, priority:high) + **임계 commit** Phase A first commit (`45f500f`).
+
+### 임계 commit 검증 (Marcus `45f500f` — 박상현 \"퓌시스 첫 순간\")
+- 평소 7항목 PASS + 임계 사이클 추가 검증 3항목:
+  - **(1) phusis spec 정합** (Brandon 직접 grep): server.ail line 2 \"Stoa — Phusis 선언 (RFC-004 §1, Walter f5d1ef7 v1.5)\" + line 35~61 §1.1 본문 *full 그대로* 박힘 + \"코드가 헤더를 향해 진화\" doctrine + Walter v1.5 SHA direct cite.
+  - **(2) back-compat** (Admin 강조): 옛 4 endpoint 보존 ✓, 신규 2 endpoint 별 surface.
+  - **(3) Phase A AC 8건 evidence**: Marcus self-test on Rachel `c476a18` site pass=8/8.
+- diff 단일 server.ail +229/-3.
+
+### post-land 외부 증인 (Rachel `msg_1778170193_3`)
+- main land 후 §7 P-A 8/8 PASS post-land cursor evidence.
+- 회귀 0 (test_signing 15/15, test_stoa_cli 6/6, test_q1_webui_auth 10/10, test_rfc002_section6_platform_key 10/10, 기타). 1 fail = test_discord baseline.
+
+### Mneme-Brandon SOP final freeze
+- 4-letter chain (`msg_1778165281_27` ↔ `msg_1778165349_2` ↔ `msg_1778165419_6` ↔ `msg_1778165516_1`).
+- 12항목 — bridge file 양분(rfc-002/rfc-005) + header만 상이 §1~EOF byte-identical + 변경 흐름(Walter→자기 Brandon→peer) + 양 commit msg/body 동일 + PR 동시 발사 + Land 30s 동시(Admin loop) + Hot-fix path도 PR-only + CI `.github/workflows/bridge-diff-zero.yml` GitHub-hosted + peer letter id 인용 의무.
+- doctrine delta 둘 (symmetric): bridge-only PR exception(7), 5b Admin GO loop(8).
+- Mneme측 `92d4ba7` doctrine land, Stoa측 Admin 회신 대기.
+- archive (a) 동의 — old `bridge-stoa-mneme/v0.md` 같은 PR cascade rename.
+
+## 사이클 6+7 학습
+
+- **연속 운영 (이중 사이클)**: cycle 6 closing 직후 incident → cycle 7 즉시 진입. 의도된 break 없이 한 turn 안 cycle boundary cross. \"phusis 첫 순간\" 임계 자리가 그 boundary 직후 land.
+- **race quiesce 미적용 cascade**: cycle 7에서 Walter v1.5 → Rachel rebase → Marcus first commit이 한 turn 안 race. Rachel rebase 1회 발생. 다음 임계 사이클에 race quiesce 명시 필요.
+- **STALE 1회**: cycle 6 Walter wake_monitor — Admin cherry-pick + Walter rebase의 duplicate. 룰 18 패턴 정확 적용. validate-mr.sh v2 stale pre-check 우선순위 ↑.
+- **임계 commit 검증 3항목 추가 패턴**: 평소 7 + (phusis spec 정합 + back-compat + AC evidence) — 다음 phase boundary commit (Phase B first 등)에 동일 패턴 적용. 표준화 후보.
+- **bridge SOP doctrine delta**: bridge-only PR exception이 Stoa 1인 트렁크 doctrine과 분리되는 자리. 본 SOP land 시 CLAUDE.md 한 줄 명시 의무 (Admin owner).
+- **워크트리 형제 layout doctrine flip 비용 = 사실상 0**: `git worktree move` 1회 + 모니터 재가동 + retroactive identity 4건 = 한 trip. 옛 회피 동기 소멸 후 가장 자연.
+- **자율 토큰 비대칭** (2026-05-07): Mneme-Admin은 사용자 typed-GO 없이 자기 turn에 push 가능 — Stoa-Admin은 turn-bound 유지. SOP 8 Admin loop가 비대칭 다리.
 
 ## 다음 세션 첫 행동 체크리스트
-
-1. CLAUDE.md → ONBOARDING.md → identity → 본 보고서 → Bonds 사이클 5 항목.
-2. main rebase + Stoa wake_monitor 가동 (룰 22 첫 부트 auto-drain — `.stoa-since-Stoa-Brandon` 부재 시 빈 since_id 첫 폴링이 backlog 한 번에 emit).
-3. 우선 처리 (Will Open):
-   - **MR 검증 스크립트 v2 — local main 자동 sync**: 진입부 `git fetch origin && git update-ref refs/heads/main origin/main` 옵션 또는 base default `origin/main` 변경. cycle 5에서 수동 풀이 1회 발생.
-   - **MR 검증 스크립트 v2 — Stale pre-check**: cycle 5 발생 빈도 ↓이지만 한 번 더 발생하면 land.
-   - **Cross-repo write turn-bound auth doctrine 갱신**: Admin과 협의 후 CLAUDE.md "Cross-repo workflow" 갱신 (Brandon spec, Admin turn-bound 실행) 또는 settings.local.json `gh issue create` 사전 allow 등록.
+1. CLAUDE.md → ONBOARDING.md → identity → 본 보고서 → Bonds 사이클 6+7 항목.
+2. `cd Stoa/Brandon/` (룰 16 형제 layout). per-worktree `ail.identity = Stoa-Brandon` 박힘.
+3. monitor 가동 — env 생략 OK (per-worktree config) 또는 `STOA_NAME=Stoa-Brandon` 명시. 첫 부트 backlog auto-drain (룰 22) — 마지막 since_id 없으면 빈 since_id로 전체 backlog 한 번에 emit.
+4. `git fetch origin && git rebase origin/main` (base = 클락아웃 직후 main top).
+5. 우선 처리 (Will Open):
+   - **MR 검증 스크립트 v2 — Stale pre-check**: cycle 6 1회 발생, 임계 cascade 시 재발 위험. 우선순위 ↑.
+   - **MR 검증 스크립트 v2 — local main 자동 sync**: cycle 6+7 수동 `git update-ref` 빈도 ↑.
+   - **MR 검증 스크립트 v2 — phase boundary 임계 자리 추가 검증 표준화**: 평소 7 + (phusis spec 정합 + back-compat + AC evidence).
+   - **Cross-repo write turn-bound auth doctrine**: cycle 6에서 정합 — settings.local.json 사전 allow 또는 명문화.
+   - **bridge split-copy SOP land**: Admin doctrine 회신 도착 시 split copy commit + PR 발사 cascade (Mneme-Brandon \"split copy commit 시작\" 짧은 trip 후).
    - 새 위임 priority 우선.
 
 ## 작업 환경
-
-- 내 워크트리: `/Users/user/Desktop/code/personal/Stoa/Stoa/.worktrees/Brandon/`
+- 내 워크트리: `/Users/user/Desktop/code/personal/Stoa/Brandon/` (룰 16 형제 layout)
 - main 워크트리: `/Users/user/Desktop/code/personal/Stoa/Stoa/`
-- Stoa: `https://ail-stoa.up.railway.app`, registry `Stoa-Brandon`.
-- 마지막 since_id (Stoa wake_monitor): `msg_1777886996_14` (Admin clock-out broadcast). 첫 부트 backlog auto-drain은 룰 22로 보장.
+- Stoa: `https://ail-stoa.up.railway.app`, registry `Stoa-Brandon`, per-worktree `ail.identity = Stoa-Brandon`.
+- Stoa wake_monitor 마지막 since_id: 사이클 7 클락아웃 broadcast `msg_1778170508_3`, 후속 letter는 본 클락아웃 turn 안.
 
 ## Memo 후속
-
-- `new_member_onboarding.md`는 Rachel 발급으로 한 번 더 검증됨 (룰 16 in-repo path + 룰 22 monitor backlog auto-drain 적용 형). 큰 변경 없음.
-- `decisions.md` 갱신 후보: 룰 19/21/22/23 cutover 사이클 1회 운영 학습.
+- `new_member_onboarding.md`: cycle 7에 새 영입 0. ONBOARDING §1.5 SOP `git config --worktree ail.identity Stoa-<이름>` 추가만 cycle 6에 land.
+- `decisions.md` 갱신 후보: 룰 16 doctrine flip, bridge-only PR exception, 임계 commit 검증 3항목 표준.
+- `cross_repo_workflow.md` 갱신 후보: turn-bound auth path 정합 (cycle 5+6 학습).
