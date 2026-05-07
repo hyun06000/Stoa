@@ -42,17 +42,18 @@ perform state.list_keys(prefix: Text) -> Result[[Text]]
 
 ### 시그니처
 
-- 입력: `prefix: Text` — 빈 문자열이면 *모든* 키.
+- 입력: `prefix: Text` — 빈 문자열이면 *모든* 키. **charset 강제** (S1): alphanumeric + `_` `-` `.` 만 허용 (state.* 키 형식과 정합). 빈 문자열은 예외(허용).
 - 반환: `Result[[Text]]`
-  - `ok([key1, key2, ...])` — prefix로 시작하는 모든 키 목록 (정렬 순서 미보장 또는 lex-asc 보장 — §의미론 결정).
-  - `err(<reason>)` — backing store 오류.
+  - `ok([key1, key2, ...])` — prefix로 시작하는 모든 키 목록. **lex 오름차순 정렬 *보장*** (S2 — arche review: SQLite/btree backing 비용 거의 0, 호출자 sort 비용 절감).
+  - `err("invalid_prefix")` — charset 위반 (S1).
+  - `err(<reason>)` — backing store 오류 등.
 
 ### 의미론
 
 - **Snapshot semantics**: 호출 시점의 키 집합. 호출 직후 `state.write`로 새 키 추가되어도 본 호출 결과에는 미반영.
 - **Atomicity는 *컬렉션 단위* 아님**: 호출 중간에 다른 worker가 삭제한 키가 결과에 포함될 수 있음 (best-effort consistency). atomic snapshot이 필요하면 호출자가 락 합성 — 본 primitive는 *list 자체*만.
-- **정렬**: **미보장**. 호출자가 sort 의무. 근거 — backing store 자유도 보존(어느 store는 lex 자연, 어느 store는 hash). 시그니처 단순화로 land 가속.
-- **Prefix가 자기 자신을 키로 가질 때**: `state.has(prefix) == true`이면 결과에 prefix 자체도 포함. 즉 `state.list_keys("foo")`는 `"foo"`(존재 시) + `"foo.*"` 모두 반환. 호출자가 `"foo." prefix only`를 원하면 prefix에 trailing separator (`"foo."`) 명시.
+- **정렬**: **lex 오름차순 보장** (arche review S2 — SQLite/btree backing 비용 거의 0, 호출자 sort 비용 절감). 결과 순서는 호출 간 동일.
+- **Prefix가 자기 자신을 키로 가질 때**: `state.has(prefix) == true`이면 결과에 prefix 자체도 포함. 즉 `state.list_keys("foo")`는 `"foo"`(존재 시) + `"foo.*"` 모두 반환. **Namespace match 패턴** (S3): 호출자가 *namespace 안 모든 키만* 원하면 prefix에 **trailing separator (`"foo."`)** 명시 — 그러면 `"foo"` 자체는 결과에 포함 안 됨(접두사 매치 실패), `"foo.a"`/`"foo.b"`만 반환. prefix-self 매치를 원하면 trailing separator 없이.
 - **빈 결과**: `ok([])` (err 아님).
 - **Empty prefix**: 모든 키 반환 — *큰 store에서는 비싼 호출*. 호출자 책임으로 prefix를 좁게.
 
@@ -75,7 +76,8 @@ perform state.list_keys(prefix: Text) -> Result[[Text]]
 - AC-2 — `state.list_keys("nonexistent.")` → `ok([])`.
 - AC-3 — prefix 자기 자신: `state.write("foo", 0)` + `state.list_keys("foo")` → `ok(["foo", "foo.a", "foo.b"])`.
 - AC-4 — empty prefix: `state.list_keys("")` → 모든 키.
-- AC-5 — 정렬 미보장. 호출자 sort 의무 (시그니처 단순). 결과 순서는 backing store 의존.
+- AC-5 — 정렬 **lex 오름차순 보장** (arche S2). 같은 입력에 대한 두 호출이 같은 순서 반환.
+- AC-7 (신규, S1·S4) — `state.list_keys("invalid prefix!")` (charset 위반) → `err("invalid_prefix")`. 회귀 — `prefix == 자기 자신 키`일 때 결과에 포함 (S4).
 - AC-6 — Snapshot: 호출 진행 중 다른 worker가 `state.write("foo.c", 3)` 호출 → 본 호출 결과에 `foo.c` 미포함 또는 포함 (best-effort).
 
 ## Cross-link

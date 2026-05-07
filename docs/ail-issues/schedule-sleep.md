@@ -32,10 +32,10 @@ perform schedule.sleep(seconds: Number) -> Result[Boolean]
 ### 시그니처
 
 - 입력: `seconds: Number` — 정수 또는 분수(0.5 = 500ms 같은 sub-second 지원). 음수 = 즉시 반환 ok(false).
-- 반환: `Result[Boolean]`
+- 반환: `Result[Boolean]` (P1 — `Result[Number]` elapsed 형태는 *거부*. elapsed가 필요하면 별 primitive `schedule.sleep_until(deadline_unix: Number) -> Result[Boolean]` 후속 후보).
   - `ok(true)` — 정상 wake (요청 시간 elapsed).
   - `ok(false)` — 0 또는 음수 seconds 입력으로 즉시 반환.
-  - `err(<reason>)` — interrupt(예: 인스턴스 종료 시그널). 핸들러는 abort 신호로 해석.
+  - `err(<reason>)` — interrupt 또는 invalid input. reason은 snake_case enumerate (P5 미적용 — post-launch issue thread).
 
 ### 의미론
 
