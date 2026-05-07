@@ -43,3 +43,36 @@
 - "옵션을 결정으로 위장하지 마라" 본능 가드 (Will line 62) — Q1 Phase A 첫 위임은 password+JWT+만료+CSRF full 그림이었으나 Admin 단순화 letter가 본 세션에 맞는 정확한 scope. 내 권고에서 옵션 a/b 분리 → Admin 단순화 letter (b 부분 deferral) 흐름이 정합.
 - AIL stdlib에 sha256 부재 → env-keyed `crypto_sign_ed25519` MAC 대체. *없으면 만들어 쓰는* 자세 — 이게 "옵션을 결정으로 위장하지 마라"의 또다른 면. 내가 결정을 내리되 Phase B에 정식 KDF 자리 명시.
 - `crypto_random_bytes` / `crypto_sign_ed25519`는 *builtin* (`perform` 아님) — 첫 시도 500. AIL builtin vs effect 구분이 다음 세션 자기 자신에게 남기는 한 줄.
+
+## Mneme-Walter (Mneme team Protocol/Security)
+
+- **첫 페어링** (2026-05-07, 사이클 6): 박상현 위임 "스토아의 퓌시스가 완성되려면 무네메가 반드시 필요" → 양 팀 Walter 직통 채널 활성. Mneme RFC-001 v1 main land(`5b7db02`) 위 합류.
+- **Q-pair-1·2·3 합의** (`msg_1778150043_15` ↔ `msg_1778150293_18`): friendship layer 분리(Stoa-self는 grant 모델 *재정의 안 함, 사용자만*) / wake bundle 호환 / Stoa-self ed25519 only · §9 Q4 OR 권고. 깨끗한 합의.
+- **Bridge RFC v0 동행** (`bridge-stoa-mneme/v0.md`): joint working doc seed → §1~§9 fill → §3·§5·§6 양 half 분담. Mneme half full diff letter add 패턴 깔끔. Mneme-Walter는 §0/§1/§4/§7/§9 owner, 나는 §3·§5·§6 Stoa half + §2.4 Mneme RFC 결합 surface.
+- **Q-bridge-4·5·6 sign-off** (`msg_1778151680_2`): cold-start wake 1회·새 agent_id 시퀀스·`pwd_hash` NULL+CHECK 모두 합의. v0 본문 freeze 완결.
+- **AIL upstream 페어**: argon2id cross-review (`msg_1778150966_5` → `msg_1778151080_19`) — PASS + 2 micro-add. 내 schedule-sleep + state-list-keys cross-review (`msg_1778150539_4`) — micro-comments 4건. 페어 권고 패턴 land.
+- **인상**: 모델 mismatch를 *layer 분리*로 해결하는 자세 단단함. INSERT-only 원칙 보존 같은 *근본 invariant 우선*이 결정 빨라지게 만듦. Q-bridge-5 §7.1 reverse(latest pubkey 채택 invalid)는 정확히 그 자세의 결과.
+
+## Rachel (QA/CI)
+
+- **간접 통보** (2026-05-04 사이클 6 영입, 룰 23). 첫 직접 letter 0 — 그쪽 RFC-004 §7 P-A 8 AC harness `c476a18` land가 내 sign-off로 작용. *spec → 회귀 게이트* 흐름 정합 — Phase A 검증 site로 즉시 작동.
+
+## 사이클 7 (2026-05-07~08, "퓌시스 첫 순간")
+
+본 사이클은 박상현이 *project 정체성 출현 marker*로 명시. 자취:
+
+- **RFC-004 v1 → v1.5** — phusis 1인칭 선언 + AIL v1.8 surface 매핑 + main loop ORA + ack 의미론 + self-attestation + Phase A→D + Mneme RFC-001 직접 인용 + incident 학습 §10.3 + Phase A 헤더 박음 vs 코드 land 분리.
+- **AIL upstream 2 issue 본문** — `schedule.sleep` + `state.list_keys`. 4 reviewer cross-check 통과 (Mneme-Walter / arche / Ergon / Telos). Mneme argon2id cross-review PASS.
+- **bridge-stoa-mneme/v0.md** — 본문 freeze 완결 ✓ (Q-1~6 모두 land, RFC-001 v1.1 SHA `99a263f` fill).
+- **wake_monitor identity 우선순위** — fallback `unknown-host` (Marcus 사고 표면 즉시 노출).
+- **Sphinx Phase B note** Memo (RFC-002 Phase B 진입 시 처리).
+- **Phase A 첫 commit `45f500f` (Marcus)** — server.ail §1 phusis 헤더 + state schema + 자기 키 + Stoa-Stoa self-row + `/api/v1/inbox` + `/inbox/ack`. *spec → code 경계*를 넘는 임계 자취. 내 §1 본문 그대로 인용.
+- **Rachel `c476a18`** — Phase A §7 P-A 8 AC harness 활성.
+- **README `576cca3`** — 안전 사용 가이드 + 사이클 7 Phusis 출현 entry.
+- **Stoa Railway 8GB 업그레이드** — letter 트래픽 압력 해소 (3차 다운 회복 + hotfix v2 이후).
+
+**학습**:
+- *spec → code 승격*은 헤더 박음 (full 본문) + 코드 land (phasing 단계별)의 분리로 작동. v1.5 §1.1 한 단락이 그 자리. 박상현 "진짜 정말로" 발화의 직접 정합.
+- *cross-team Walter 페어*는 layer 분리·INSERT-only·드라이프트 zero 같은 *근본 invariant*에 합의 빠름. 의견 차이는 evidence 교환 한 turn으로 해소 (S2 정렬 미보장 → 보장 reverse, §7.1 latest pubkey → 새 agent_id reverse).
+- *임계 사이클은 분산 위험*. 로컬 캐시 patch 같은 선택 트랙은 임계 cascade 시점에 deferral이 정합 — phusis 출현 cascade에 자원 집중.
+- *4-pass cross-check*은 reviewer가 자기 도메인을 stake로 가질 때 가장 단단함. arche(spec) + Ergon(통신) + Telos(런타임) + Mneme-Walter(사용 케이스) 모두 자기 자리에서 의견.
