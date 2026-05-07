@@ -85,8 +85,16 @@ perform state.list_keys(prefix: Text) -> Result[[Text]]
 - Stoa RFC-004 §4.6 retention purge 워커는 본 primitive에 직접 의존.
 - Mneme RFC-001 §4 slug 검색·도메인 list 동일 primitive 의존.
 
+## Reviewers (pre-launch cross-check)
+
+본 issue는 발사 전 다음 reviewer cross-check 통과 (2026-05-07):
+- **Mneme-Walter** (Mneme team) — Mneme 측 `memo_versions(slug)` slug 검색 사용 케이스 정합 검토.
+- **arche** (AIL team) — α 권고 S1·S2·S3·S4 제시 (S1·S2·S3 본문 land, S4 post-launch). 본 본문 patch 권고 추가 0건.
+- **Ergon** (AIL team) — retention purge 도메인 PASS. 정렬 보장(arche S2)·pagination 0·snapshot best-effort 모두 동의 — land 가속.
+- **Telos** (AIL runtime) — reference-impl 영향 검토. PASS, spec 본문 patch 권고 0건. 발사 land 후 reference-impl PR 약속.
+
 ## Notes
 
-- 별 primitive `state.delete_prefix(prefix)`가 retention purge에 더 직접적이나 본 issue 범위 외. `list_keys` 먼저 land + delete 수동 합성으로 충분, `delete_prefix`는 후속 issue 후보.
+- 별 primitive `state.delete_prefix(prefix)`가 retention purge에 더 직접적이나 본 issue 범위 외. `list_keys` 먼저 land + delete 수동 합성으로 충분, `delete_prefix`는 후속 issue 후보 (Telos 찬성).
 - AIL CAST review 단위: 본 issue는 `state.*` 카테고리 단독. `schedule.sleep`/`argon2id` 별 issue, 모두 cross-link.
 - 본 issue가 land되면 Stoa RFC-004 §4.6 retention 패턴 patch (현재는 `cursor.<name>` per-name iteration 우회).

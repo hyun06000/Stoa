@@ -41,15 +41,15 @@ perform schedule.sleep(seconds: Number) -> Result[Boolean]
 
 - **Cooperative**: 같은 인스턴스 내 다른 worker는 영향 받지 않음. event loop yield, OS-level wait queue 사용 권고.
 - **Wakeable from outside**: `on_letter` 같은 외부 이벤트가 도착해도 *해당 핸들러*의 sleep은 깨우지 않음 (별 worker). 핸들러 자체에서 condition을 다시 polling 해야 — 즉 sleep은 *throttle/간격 도구*이고 *condition wait*은 sleep + condition check loop로 합성.
-- **Cancellation on shutdown**: 인스턴스가 `on_death` 진입 시 모든 sleep을 `err("interrupted")`로 깨움.
+- **Cancellation on shutdown**: 인스턴스가 `on_death` 진입 시 모든 sleep을 `err("interrupted")`로 깨움. **순서 명시** (arche A2): sleepers interrupted *before* `on_dying` enters — 첫 구현 데드락 회피 (sleeper가 `on_dying` hook 안에서 깨어나길 기다리는 사이클 방지).
 
 ### Edge cases
 
-- `schedule.sleep(0)` → `ok(false)` 즉시.
+- `schedule.sleep(0)` → `ok(false)` 즉시. **`ok(true)`가 아닌 `ok(false)` 정당화** (arche C1): `ok(true)` 의미는 "요청 시간 elapsed 후 정상 wake" — 0초 입력은 *elapsed 없음*이라 false가 정합. ail-coder가 `if let ok(true) = sleep(...)` 패턴으로 *실제로 잠들었는지* 분기할 때 의미 보존.
 - `schedule.sleep(<0)` → `ok(false)` 즉시 (negative as "no-op").
 - `schedule.sleep(NaN/Inf)` → `err("invalid duration")`. *AIL Number 모델 의존* — IEEE-754면 적용, 정수 only면 본 edge 자체 발생 안 함 (parser/runtime이 미리 차단). Stoa-Marcus check-in pending.
 - 매우 큰 값 (예: 1e9 초) → 허용. 인스턴스 lifetime 안에 wake 안 일어나면 `on_death`로 interrupt.
-- 핸들러 안 sleep과 timeout(예: HTTP 60초 limit) 정합: sleep이 핸들러 timeout보다 길면 outer timeout이 핸들러를 abort, sleep도 함께 중단.
+- 핸들러 안 sleep과 timeout(예: HTTP 60초 limit) 정합: sleep이 핸들러 timeout보다 길면 outer timeout이 핸들러를 abort, sleep도 함께 중단. **책임 명시** (arche A4): outer timeout abort는 *surrounding handler/runtime의 책임* — `schedule.sleep`은 자기 시간만 책임지고 outer deadline을 자기가 추적하지 않음. 호출자가 `clock.now("unix")` + deadline 비교로 합성.
 
 ### Non-goals
 
@@ -71,7 +71,16 @@ perform schedule.sleep(seconds: Number) -> Result[Boolean]
 - Stoa RFC-004 §4.3 long-poll 합성 우회 코드 — sleep 도입 시 patch 1줄.
 - Mneme RFC-001 §11.1 의제. Mneme은 동일 primitive 의존, 별 issue로 발행 안 함 (본 issue가 packaging single point).
 
+## Reviewers (pre-launch cross-check)
+
+본 issue는 발사 전 다음 reviewer cross-check 통과 (2026-05-07):
+- **Mneme-Walter** (Mneme team) — Mneme 측 `/wake` long-poll·retention purge 사용 케이스 정합 검토.
+- **arche** (AIL team) — α 권고 P1·P2·P3·P4·P5 제시 (P1 본문 land, P2~P5 post-launch issue thread). 추가 patch A2·A4·C1 본문 land.
+- **Ergon** (AIL team) — evolve-server long-poll busy-poll → OS wait queue 1줄 patch 본인 stake. PASS.
+- **Telos** (AIL runtime) — reference-impl 영향 검토. PASS, spec 본문 patch 권고 0건. 발사 land 후 7일 안 reference-impl PR (`test_executor_state.py` / `test_schedule_effects.py` + executor.py ~80 LOC) 약속.
+
 ## Notes
 
 - AIL CAST review 단위: 본 issue는 `schedule.*` 카테고리 단독 — `state.list_keys(prefix)` 별 issue로 분리, `argon2id` Mneme 측 별 issue로 분리. 세 issue 모두 cross-link.
 - 본 issue가 land되면 Stoa RFC-004 §4.3 polling 합성 → `schedule.sleep + condition check` 패턴으로 patch (RFC-004 v1.x 후속).
+- 후속 issue 후보 (본 issue land 후 별 사이클): `schedule.sleep_until(deadline_unix)` (P1 alternative), `state.delete_prefix` (retention purge 직접 primitive). Telos 찬성 — Stoa-Brandon 또는 AIL 측 누구든 file 가능.
