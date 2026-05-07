@@ -65,6 +65,24 @@ if [ "${STOA_PHASE_A:-0}" = "1" ] && [ -d "$SCRIPT_DIR/phase_a" ]; then
     done
 fi
 
+# RFC-004 Phase B — STOA_PHASE_B=1일 때만 실행. Phase B는 self-contained boot
+# (fast-tick env override 필요)이라 STOA_URL 무시 — phase_b/ 테스트 자체가 자기
+# server 띄움. Marcus Phase B 코드 main land 전까지 default 0.
+if [ "${STOA_PHASE_B:-0}" = "1" ] && [ -d "$SCRIPT_DIR/phase_b" ]; then
+    for t in "$SCRIPT_DIR"/phase_b/test_*.sh; do
+        [ -f "$t" ] || continue
+        name="phase_b/$(basename "$t")"
+        echo
+        echo "── $name ────────────────────────────────────"
+        if STOA_PHASE_B=1 bash "$t"; then
+            PASS=$((PASS+1))
+        else
+            FAIL=$((FAIL+1))
+            echo "  ✗ $name FAILED"
+        fi
+    done
+fi
+
 echo
 echo "════════════════════════════════════════════════"
 echo "  pass=$PASS  fail=$FAIL"
