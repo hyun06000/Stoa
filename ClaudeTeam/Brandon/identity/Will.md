@@ -24,9 +24,15 @@
 - **Untracked MR letter도 핸드오프 commit에 archive로 묶어 land**: 멤버가 race 회피로 untracked drop한 letter는 내 handoff commit에서 `git add -A inbox/` 한 번에 처리. 룰 18 위반 자체는 "내 handoff에서 land"로 무해화.
 
 ## Open
-- Admin이 자기 inbox 아카이빙을 git-tracked로 갈지 untracked로 갈지 정하면 내 절차에도 반영.
-- **MR 검증 스크립트 v2 — Stale pre-check (사이클 4 신규, 우선순위 1)**: 진입부에 "main이 이미 MR 동등 내용 포함하는지" 체크. 3번째 stale 발생 (cycle 3 Step 2/4a, cycle 4 Q1+BugB) — Admin 우회 land 빈도 명확. 자동 STALE 출력로 즉시 no-op ack 패턴(`c36f5b2`).
+- **MR 검증 스크립트 v2 — Stale pre-check**: cycle 4 이월. 사이클 5에서는 stale 0건이라 발생 빈도가 낮아졌지만 (룰 19 cutover + 능동 push doctrine 정합), Admin이 사용자 직접 priority:high로 우회 land하는 시나리오는 여전. 한 번 더 발생하면 land.
 - **MR 검증 스크립트 v2 후보 (cycle 3 이월)**: AIL test runner 통합 (현재 stub), `gh` PR-gate 연계 (PR 단계 도입 시), conflict pre-merge dry-run.
+- **local main ref 자동 sync**: cycle 5에서 `validate-mr.sh`가 stale local `main`을 base로 잡아 false ahead 카운트 발생 (Walter RFC-002 §6.4 첫 검증). `git update-ref refs/heads/main origin/main`으로 수동 풀었음 — 자동화 후보 (validate-mr.sh 진입부에 `git fetch + update-ref` 옵션, 또는 base 인자 default를 `origin/main`로).
+- **Cross-repo write turn-bound auth doctrine**: cycle 5에서 AIL repo issue 발행 위임이 하니스 권한 게이트로 차단됨 — 사용자 직접 turn 안 GO 부재. Admin이 자기 turn에서 사용자 GO 받아 직접 발행으로 풀음 (push doctrine과 동등 패턴). 다음 doctrine 갱신 후보: (a) "Cross-repo external write도 spec=Brandon, 실행=Admin (turn-bound auth)" 명문화, (b) settings.local.json에 `gh issue create --repo hyun06000/AIL` 사전 allow.
+
+## Closed (사이클 5, 2026-05-04)
+- ~~Rachel 영입 발급~~ → branch + worktree + Stoa registry + 환영 letter `05b4049` ship. 룰 23 (a) 증설 첫 적용.
+- ~~파일시스템 inbox archive 작업 금지 doctrine~~ → 룰 19 cutover로 자연 정리. 옛 inbox 디렉터리 git rm 처리는 Admin 영역에서 land.
+- ~~MR 검증 사이클 12회~~ — Walter 7건 (errata + RFC-002 §6.4 + issue#3 + issue#6 + Q1 Phase A + issue#7 + clock-out), Marcus 5건 (session 4 doc, Step 5 §11 client signing, issue#1, issue#2, issue#4, stoa-cli). 모두 PASS. 1건 (Marcus session 4 doc 첫 시도) FAIL → Marcus self-rebase + Step 5 commit으로 재 PASS.
 
 ## Closed (사이클 4)
 - ~~모니터 두 path 동시 추적 보강~~ → 본 세션에 fs-main(`btfgcpuwo`) + fs-worktree(`bm46sydyr`) + Stoa(`bz91x2x1x`) 3중 가동으로 자연 해소. cost 무시 가능.
