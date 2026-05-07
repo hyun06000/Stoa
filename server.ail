@@ -234,6 +234,38 @@ fn _get_test_time() -> Any {
     return unwrap(n)
 }
 
+// _get_retention_seconds: STOA_LETTERS_RETENTION_SECONDS env. 기본 604800 (7일).
+// arche audit (msg_1778156441_12) — Railway 메모리 압력 즉효 fix. 본 사이클 표본 avg
+// 1.97KB · max 11.2KB · 200 letter / ~6시간이라 7일 cap이면 누적 메모리 ~수십MB로 묶임.
+// 0 = purge 비활성 (옛 letter 보존). 음수/오값은 기본값 fallback.
+fn _get_retention_seconds() -> Number {
+    r = perform env.read("STOA_LETTERS_RETENTION_SECONDS")
+    if is_error(r) { return 604800 }
+    v = trim(unwrap(r))
+    if v == "" { return 604800 }
+    n = to_number(v)
+    if is_error(n) { return 604800 }
+    val = unwrap(n)
+    if val < 0 { return 604800 }
+    return val
+}
+
+// _get_content_max_bytes: STOA_LETTER_CONTENT_MAX_BYTES env. 기본 100000 (100KB).
+// arche audit 표본 max 11.2KB → 100KB는 10x headroom. 0 = 무제한 (안전망 비활성).
+// AIL `length(text)` 는 character 단위 — 비-ASCII는 byte보다 작지만 cap 의도는 "터무니없는
+// payload 차단"이라 char 기준도 충분 (한글 letter 300KB byte ≈ 100KB char ≈ cap).
+fn _get_content_max_bytes() -> Number {
+    r = perform env.read("STOA_LETTER_CONTENT_MAX_BYTES")
+    if is_error(r) { return 100000 }
+    v = trim(unwrap(r))
+    if v == "" { return 100000 }
+    n = to_number(v)
+    if is_error(n) { return 100000 }
+    val = unwrap(n)
+    if val < 0 { return 100000 }
+    return val
+}
+
 fn _is_leap_year(y: Number) -> Boolean {
     if y % 400 == 0 { return true }
     if y % 100 == 0 { return false }
@@ -426,12 +458,20 @@ fn validate_envelope(body: Any) -> Any {
 
     c = _check_str(body, "content")
     if is_error(c) { return c }
+    content_text = unwrap(c)
+
+    // (a) content size cap — Railway 메모리 압력 안전망. arche audit (msg_1778156441_12)
+    // 표본 max 11.2KB → 100KB는 충분한 headroom. 0이면 무제한 (env로 비활성 가능).
+    cmax = _get_content_max_bytes()
+    if cmax > 0 and length(content_text) > cmax {
+        return error(join(["content_too_large: max ", to_text(cmax), " chars"], ""))
+    }
 
     return ok(make_record([
         ["from_name", unwrap(fn_n)],
         ["from_address", unwrap(fn_a)],
         ["recipients", recipients],
-        ["content", unwrap(c)]
+        ["content", content_text]
     ]))
 }
 
@@ -500,8 +540,35 @@ fn db_get_letter(msg_id: Text) -> Any {
     return _row_to_envelope(rows[0])
 }
 
+// _purge_old_letters: created_at < (now - retention) 인 letter + 매핑된 recipient 행 삭제.
+// SQLite는 FK CASCADE 미선언이라 recipients 먼저, letters 나중. 같은 cutoff iso로 두 DELETE.
+// retention=0 은 비활성. SQLite strftime으로 cutoff 계산 — AIL 측에 unix→iso 빌더 부재 +
+// SQL 한 번이면 됨. iso format은 letters.created_at(now_iso = clock.now("iso") = `YYYY-
+// MM-DDTHH:MM:SSZ`)와 lex-byte 일치 필요 → strftime 포맷 그대로 맞춤.
+//
+// 호출 시점: db_inbox_for / db_all_letters 입구 (polling 응답 시점). INSERT 핸들러에서
+// 호출 안 함 — POST latency 영향 회피. polling은 평소 3초 주기로 자주 도착하므로 retention
+// 신선도 충분.
+//
+// PRINCIPLES §3 (no-edit/no-delete) 정합: letters/recipients는 *통신 leg* 도메인이라 만료된
+// leg 회수는 row 변경(=내용 바꾸기)이 아닌 *expire*. RFC-004 §4.6 retention 단축판으로 land.
+fn _purge_old_letters() -> Any {
+    retention = _get_retention_seconds()
+    if retention <= 0 { return None }
+    modifier = join(["-", to_text(retention), " seconds"], "")
+    db = get_db_file()
+    perform db.execute(db,
+        "DELETE FROM recipients WHERE letter_id IN (SELECT id FROM letters WHERE created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?))",
+        [modifier])
+    perform db.execute(db,
+        "DELETE FROM letters WHERE created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
+        [modifier])
+    return None
+}
+
 fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
     _init_db()
+    _purge_old_letters()
     db = get_db_file()
     r = None
     if since_id == "" or since_id == "0" {
@@ -523,6 +590,7 @@ fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
 
 fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
     _init_db()
+    _purge_old_letters()
     db = get_db_file()
     r = None
     if since_id == "" or since_id == "0" {
