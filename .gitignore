@@ -13,6 +13,6 @@ mailbox/
 .vscode/
 .idea/
 
-# Member worktrees (in-repo, sandbox doctrine 2026-05-03 — see ONBOARDING §0.5)
-.worktrees/
+# Member worktrees now sit at repo siblings (`<repo>/../<name>/`, 2026-05-07 — see CLAUDE.md rule 16).
+# 옛 in-repo .worktrees/ doctrine 폐기. 형제 path는 git 자체가 트래킹하지 않으므로 ignore 불필요.
 .stoa-since-*

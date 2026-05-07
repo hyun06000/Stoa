@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - inbox 3장 이상 즉답 안 되고 컨텍스트 부하감.
     - 연속 N turn 사용자 직접 응답 욕구 발생 (본능 가드 규칙 13 참조).
     세션 피로 임계점에서 능동 클락아웃이 룰 위반보다 안전하다.
-16. **워크트리는 repo 내부 `Stoa/Stoa/.worktrees/<이름>/` (2026-05-03).** 하니스 sandbox가 프로젝트 루트 외부 dir을 turn 사이에 휘발시킨다 — 옛 `<parent>/ClaudeTeam-<이름>/` doctrine 폐기. `.worktrees/`는 `.gitignore` 등재(공유 자산 아님, 각 머신 로컬). Brandon은 이 path로 발급, 멤버는 이 path 안에서 monitor·commit.
+16. **워크트리는 repo 형제 path `<repo>/../<이름>/` (2026-05-07 재배치).** 즉 `Stoa/<이름>/` (예: `Stoa/Brandon/`, `Stoa/Walter/`). **Admin 예외**: 워크트리 없음, repo 자체(`Stoa/Stoa/` — 프로젝트명 그대로)에서 작동. 옛 in-repo `<repo>/.worktrees/<이름>/` doctrine(2026-05-03 land)은 폐기 — 멤버 영입 시 *재귀적 위치 문제* 발생(워크트리 안에 또 워크트리 발급 시 중첩 + path 일관성 붕괴). 형제 layout으로 평탄화하면 모든 멤버가 동등 depth, repo는 단지 그중 하나(Admin이 머무는 칸). 사용자 환경의 sandbox가 더 이상 형제 path를 휘발하지 않으므로 옛 회피 동기 소멸. Brandon은 이 새 path로 발급·이전, 멤버는 이 path 안에서 monitor·commit. 옛 `.worktrees/` 디렉터리·gitignore 항목 정리.
 17. **Admin 대기 진입 전 팀 교착 점검 의무.** Admin이 `say ya`/idle 보고 등으로 사용자 응답 대기 모드에 들어가기 직전 다음을 일괄 점검해서 `Memo/last_session_report.md` 또는 사용자 보고에 결과 한 줄 포함:
     - **모든 멤버 inbox 미처리 letter** — `ls ClaudeTeam/*/inbox/*.md` (archive 제외).
     - **모든 멤버 워크트리 untracked inbox 파일** — `git -C .worktrees/<X> status --short | grep '?? .*inbox/'` (path 불일치 deadlock 신호).
