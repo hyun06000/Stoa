@@ -786,17 +786,26 @@ fn _get_cursor(name: Text) -> Text {
 // 멱등 (cur == mid → 무변경 + cur 반환), 역행 방지 (mid의 letter rowid가 현
 // cursor의 letter rowid보다 작거나 같으면 INSERT 안 함).
 //
+// **recipient 매칭 검증** (Phase A 사이클 8 hardening): mid는 *name이 수신자인*
+// letter여야 함. 다른 이름 앞 letter id로 ack 시도하면 cross-recipient rowid로
+// cursor가 advance되어 사이 in-bound letter들이 silently skip되는 자리 — Phase A
+// grandfather 모델(§4.5 "to=<name> 보낸 측이 곧 ack 자격") 신뢰 위에서도 *cursor
+// 모델 자체*의 정합 자리. recipient join으로 차단. auth는 Phase C.
+//
 // 비교는 SQL `INSERT ... SELECT ... WHERE` 패턴으로 한 트랜잭션에 수행 — AIL
-// 측 Number 타입 비교 우회. 첫 ack는 letters에 mid 존재만 확인 후 INSERT.
+// 측 Number 타입 비교 우회.
 fn _advance_cursor(name: Text, mid: Text, ts: Text) -> Text {
     db = get_db_file()
     cur = _get_cursor(name)
     if cur == mid { return cur }
+    // recipient 매칭 사전 검증 — mid가 name 인박스 letter가 아니면 advance 0.
+    chk = perform db.query(db,
+        "SELECT 1 FROM letters l JOIN recipients r ON r.letter_id = l.id WHERE l.id = ? AND r.name = ? LIMIT 1",
+        [mid, name])
+    if is_error(chk) { return cur }
+    if length(unwrap(chk)) == 0 { return cur }
     if cur == "" {
-        // 첫 ack — letter 존재만 확인 후 INSERT.
-        chk = perform db.query(db, "SELECT 1 FROM letters WHERE id = ? LIMIT 1", [mid])
-        if is_error(chk) { return "" }
-        if length(unwrap(chk)) == 0 { return "" }
+        // 첫 ack — recipient 매칭 통과 후 INSERT.
         perform db.execute(db,
             "INSERT INTO inbox_cursors (name, cursor_msg_id, advanced_at) VALUES (?, ?, ?)",
             [name, mid, ts])
