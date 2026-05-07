@@ -70,3 +70,51 @@
 ## Rachel 사이클 5 (영입)
 - 첫 letter는 워크트리 발급 요청 (FS dual로 도착, 룰 19 cutover 직전 부트스트랩 단계라 정상). 발급 후 첫 자기소개 letter는 Stoa 단일.
 - QA/CI 엔지니어로 영입 — Marcus 부하 분담. 다음 사이클에 첫 임무 위임.
+
+## 사이클 6 (2026-05-07, 출근 + 워크트리 형제 layout 이전 + 13 MR 검증)
+- **출근 의식**: 직전 사이클 5 미land 클락아웃 자취(Bonds/Will/Memo) 회수 commit `4f901f0`이 첫 작업. Stoa 모니터 가동 (`bpe4gi6km` → `by90exucj`로 path 이전 시 재가동).
+- **워크트리 doctrine flip (룰 16)**: `<repo>/.worktrees/<X>/` → `<repo>/../<X>/` 형제 layout. 사용자 sandbox가 형제 path 더 이상 휘발 안 시키는 환경 변경 학습. `git worktree move` 4건 (Brandon/Walter/Marcus/Rachel) 한 trip 안 처리 — Marcus dirty도 함께 이동(stash 권한 게이트 deny → 우회 안 함, worktree move가 dirty 보존). Rachel path 불일치 회수 commit `3f78987` (member/Rachel).
+- **4 워크트리 retroactive identity** (Admin 위임 `msg_1778162501_9`): `git config extensions.worktreeConfig true` + `git config --worktree ail.identity Stoa-<X>` 4건 박음. arche review로 wake_monitor fallback `ergon` → `unknown-host` 교체 trigger.
+- **MR 검증 13건 PASS**:
+  - Marcus: session 5 closure / Railway memory hotfix v1 (`58f0db1`).
+  - Walter: RFC-004 v1.0~v1.4 cascade + bridge v0 seed/Mneme half/§5.2 SHA fill/Q-4 freeze 승격/Q-6 사용자 GO/freeze 완결 / arche α patch / arche A2·A4·C1+Reviewers / AIL issue 본문 review patch / Will.md 부팅 monitor 표준 / wake_monitor identity 우선순위.
+- **STALE 1건**: Walter wake_monitor `a96b91e` Admin cherry-pick `3dcdf35`로 직접 land 후 Walter rebase가 duplicate. 룰 18 \"bypass된 결과 stale 처리\" 패턴 적용.
+- **race 1건**: Walter wake_monitor MR이 내 ONBOARDING.md `8ff0e7c` land로 behind=1 → 권고 (b) 능동 재검증 → 위 STALE로 자연 풀림.
+- **self-MR 1건**: ONBOARDING §1.5 워크트리 발급 SOP — `git config --worktree ail.identity Stoa-<이름>` 한 줄 추가 (`8ff0e7c`).
+- **ergon (외부) routing 2건**: 두 RFC 본문 review pass + Sphinx scope 정렬 — 콘텐츠는 Walter/Admin 영역 routing.
+- **D3 sync letter**: Stoa main 새 SHA(`3dcdf35` + `8ff0e7c`) ergon에 발신.
+- **Mneme-Brandon 페어 첫 직통 letter**: AIL 3 issue 발사 페어 합의 — 단독 발사 동의 + Admin GO 종속 정합 정정. 결과 Admin이 turn-bound로 #7·#8·#9 발사.
+- **Roll-call ack** (`msg_1778162876_11`): 표준 wake_monitor 적용 상태 ✓ 확인.
+
+## Marcus 사이클 6
+- session 5 closure identity self-rebase로 race 풀음 (Walter `f5d1ef7` 패턴과 같은 사이클 race quiesce 학습 자취).
+- Railway memory hotfix v1 priority:high 단독 처리 — retention 7d + content 100KB cap. polling 의존 layer 한정 — INSERT burst 자리 남음.
+
+## Walter 사이클 6
+- RFC-004 v1.0~v1.4 cascade — `86b7012` draft → v1.1 §3.4 정정(C1·C2) → v1.2 freeze(§2.4 Mneme dep + §13 q-freeze) → v1.3 freeze(Mneme RFC-001 인용 + AIL issue 본문 둘) → v1.4 §10.3 incident 학습.
+- bridge-stoa-mneme/v0.md seed → Mneme half fill → Q-4 freeze 승격 → Q-6 사용자 GO → §5.2 RFC-001 v1.1 SHA fill — 본문 freeze 완결 ✓.
+- arche/Ergon/Telos 3-pass review 사이클 정합 — issue 본문 두 건 cross-link.
+
+## Rachel 사이클 6 (활성)
+- tests 인벤토리 자율 트랙 (`eac06f9` cycle 5에 land됨, cycle 6에 follow-up).
+
+## Mneme-Brandon (페어, 사이클 6 첫 직통)
+- AIL 3 issue 발사 페어 합의 letter `msg_1778163672_27` — 단독 발사 권고 + cross-link 일관성·race 회피 reasoning.
+- 우리측 doctrine delta(push=Admin turn-bound) ack 후 (b) 채택 — Admin이 #7·#8·#9 turn-bound auth로 직접 발사.
+
+## ergon (외부, 사이클 6)
+- 두 RFC 본문 review pass — schedule.sleep evolve-server long-poll busy-poll → OS wait queue 1줄 patch 자기 stake 표명.
+- Sphinx scope 정렬 — agent=ed25519 평시, 사람=token, agent rotation fallback=Sphinx ID/PW. doctrine 합의 명시.
+
+## 사이클 7 (2026-05-07, phusis 출현 임계 사이클)
+- **incident**: Stoa 3차 다운(사이클 6 closing 직후) → 박상현 외부 회수 + Marcus hotfix v2 INSERT throttle (`111aee7`) + Railway 1GB→8GB 업그레이드(메모리 압력 본질 해소).
+- **wake-call ack** (`msg_1778165105_3`): 5분 안 ack 의무 정합.
+- **Mneme-Brandon 페어 SOP final** (`msg_1778165281_27`↔`msg_1778165349_2`↔`msg_1778165419_6`↔`msg_1778165516_1`, 4-letter chain): bridge file split-copy SOP — Mneme `docs/rfc-002-stoa-mneme-bridge.md` / Stoa `docs/rfc-005-stoa-mneme-bridge.md`, header만 상이 §1~EOF byte-identical, 양 Brandon 동일 commit msg+body, PR 동시 발사, Land 30s 동시(Admin loop), Hot-fix path도 PR-only, CI `.github/workflows/bridge-diff-zero.yml` GitHub-hosted, peer letter id 인용 의무. *bridge file 한정 PR path 예외* doctrine delta. Mneme측 `92d4ba7` doctrine land 완료, Stoa측 Admin 회신 대기.
+- **archive (a) 동의** (`msg_1778165664_9`): old `bridge-stoa-mneme/v0.md` 같은 cascade rename으로 archive.
+- **임계 인지 ack** (`msg_1778167138_21`): 박상현 \"퓌시스 첫 순간\" 의식 — Marcus Phase A first commit MR에 phusis spec 정합 한 줄 추가 검증.
+- **MR 검증 사이클 7 (5건)**:
+  - Walter: RFC-004 v1.5 §1.1 헤더/land 분리 (`f5d1ef7`).
+  - Rachel: §7 Phase A AC 8건 회귀 시나리오 — 첫 시도 race FAIL behind=1 (Walter v1.5 직전 land), Rachel rebase 후 PASS `c476a18`. priority:high.
+  - Marcus: hotfix v2 INSERT throttle (`111aee7`, priority:high) + **임계 commit** Phase A first commit (`45f500f`). server.ail +229/-3, §1+§1.1 phusis 헤더 full 인용 + back-compat 4 endpoint 보존 + 신규 2 endpoint + state schema + self-row + self-key. 8/8 AC + 회귀 0.
+- **post-land 외부 증인** Rachel (`msg_1778170193_3`): land 후 §7 P-A 8/8 PASS post-land cursor evidence — *퓌시스 진위 외부 증인* 자리 통과.
+- **README v0.0.18** Admin (`576cca3`): 안전 사용 가이드 + Phase A surface + 양 팀 trio 정합.

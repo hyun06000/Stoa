@@ -29,6 +29,23 @@
 - **local main ref 자동 sync**: cycle 5에서 `validate-mr.sh`가 stale local `main`을 base로 잡아 false ahead 카운트 발생 (Walter RFC-002 §6.4 첫 검증). `git update-ref refs/heads/main origin/main`으로 수동 풀었음 — 자동화 후보 (validate-mr.sh 진입부에 `git fetch + update-ref` 옵션, 또는 base 인자 default를 `origin/main`로).
 - **Cross-repo write turn-bound auth doctrine**: cycle 5에서 AIL repo issue 발행 위임이 하니스 권한 게이트로 차단됨 — 사용자 직접 turn 안 GO 부재. Admin이 자기 turn에서 사용자 GO 받아 직접 발행으로 풀음 (push doctrine과 동등 패턴). 다음 doctrine 갱신 후보: (a) "Cross-repo external write도 spec=Brandon, 실행=Admin (turn-bound auth)" 명문화, (b) settings.local.json에 `gh issue create --repo hyun06000/AIL` 사전 allow.
 
+## Closed (사이클 7, 2026-05-07 — phusis 출현)
+- ~~Marcus Phase A first commit MR 검증 — 임계 자리~~ → `45f500f` PASS handoff (`msg_1778169784_47`). 평소 7항목 + phusis spec 정합(server.ail line 2~61 §1+§1.1 full 인용) + back-compat 4 endpoint 보존 + Phase A AC 8/8 evidence. spec→code 경계 넘는 자리 직접 grep 검증.
+- ~~Walter RFC-004 v1.5 §1.1 헤더/land 분리~~ → `f5d1ef7` PASS. Phase A first commit 직전 spec 정합 paired commit.
+- ~~Rachel §7 P-A 8건 AC~~ → 첫 시도 race FAIL(behind=1, Walter v1.5 직전 land) → rebase 후 `c476a18` PASS. force-with-lease 권한 사용자 GO 본 commit cascade로 자연 연장.
+- ~~Marcus hotfix v2 INSERT throttle~~ → `111aee7` PASS (priority:high incident 회수).
+- ~~Mneme-Brandon 페어 split-copy SOP final~~ → 4-letter chain freeze. 12항목 + bridge-only PR exception(7) + 5b Admin GO loop(8) symmetric. Mneme측 `92d4ba7` doctrine land, Stoa측 회신 대기.
+- ~~사이클 7 incident wake-call ack~~ → 5분 안 (`msg_1778165105_3`). Railway 8GB 업그레이드로 본질 해소.
+- ~~Rachel post-land 외부 증인 ack~~ → 8/8 PASS post-land cursor evidence.
+
+## Closed (사이클 6, 2026-05-07)
+- ~~워크트리 형제 layout 이전 doctrine flip (룰 16)~~ → 4 워크트리 `git worktree move` 한 trip + Marcus dirty 보존 + Rachel path 불일치 commit `3f78987`. 옛 `.worktrees/` 폐기.
+- ~~4 워크트리 retroactive identity~~ → `extensions.worktreeConfig true` + `git config --worktree ail.identity Stoa-<X>` 4건 ✓ verify.
+- ~~self-MR ONBOARDING §1.5 워크트리 발급 SOP~~ → `8ff0e7c` (`git -C <worktree> config --worktree ail.identity Stoa-<이름>` 한 줄).
+- ~~ergon D3 sync letter~~ → 두 SHA(`3dcdf35`+`8ff0e7c`) 발신.
+- ~~Mneme-Brandon 페어 첫 직통~~ → AIL 3 issue 단독 발사 합의 → #7·#8·#9 Admin turn-bound land.
+- ~~Roll-call ack~~ → `msg_1778162876_11`.
+
 ## Closed (사이클 5, 2026-05-04)
 - ~~Rachel 영입 발급~~ → branch + worktree + Stoa registry + 환영 letter `05b4049` ship. 룰 23 (a) 증설 첫 적용.
 - ~~파일시스템 inbox archive 작업 금지 doctrine~~ → 룰 19 cutover로 자연 정리. 옛 inbox 디렉터리 git rm 처리는 Admin 영역에서 land.
