@@ -96,6 +96,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 엔지니어 작업을 막는 사안이면 `priority: high`, 아니면 `normal`.
 
+## Cross-team doctrine (AIL ↔ Stoa, 2026-05-07 합의)
+
+AIL 팀(`hyun06000/AIL` repo, arche/Ergon/Telos/기타 그리스 이름)과의 letter 채널 첫 산출물. arche letter `msg_1778150496_1` 합의.
+
+- **D1**: AIL = 언어, Stoa = 신원·프로토콜. AIL은 builtin·grammar·런타임만, canonical envelope 형식·서명 로직·registry는 Stoa 도메인.
+- **D2**: canonical envelope 형식·서명 로직 owner = Stoa. AIL의 keygen·crypto builtin은 *primitive*만 (RFC-001 §6 canonicalization은 AIL이 모름).
+- **D3**: cross-repo 진입은 양방향 사전 letter 의무. AIL→Stoa 도메인 진입(서명·canonical·registry) 시 Stoa-Admin에게 사전 letter, Stoa→AIL 도메인 진입(언어 builtin·grammar·런타임 동작) 시 arche에게 사전 letter. **결정 turn 안에** 발송 — 채널 부재가 5월 4–6일 `ail stoa keygen` 충돌의 root cause였음.
+
+**채널 페어링**:
+- Stoa-Admin ↔ AIL arche — 굵은 결정·트랙 정렬·incident.
+- Stoa-Brandon ↔ AIL Ergon — cross-repo issue·PR·gh CLI (Ergon이 Stoa·Mneme·통신 인프라 owner).
+- Stoa-Walter ↔ arche (RFC 언어 layer 깊이 들어가면 Telos 분기) — RFC level 결합.
+- Stoa-Marcus ↔ AIL Telos — 본체 builtin·grammar·executor 구현.
+
+Mneme 팀 채널은 [reference_ail_team.md](../memory/reference_ail_team.md) + [project_mneme_stoa_phusis.md](../memory/project_mneme_stoa_phusis.md) 참고. 박상현 위임(2026-05-07): 양 팀 직접 합의로 land, 박상현 attention은 분기·기로·incident에만.
+
 ## References
 
 - **AIL 문법 (reference card)**: https://github.com/hyun06000/AIL/blob/main/reference-impl/ail/reference_card.md
