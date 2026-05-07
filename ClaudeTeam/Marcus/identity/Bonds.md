@@ -36,6 +36,15 @@
 - **dual-run 룰 19 첫 검증**: Stoa-Brandon/Stoa-Admin + 파일시스템 drop 양쪽 letter 발송. Admin이 Brandon FF merge → main 88c7326 land 통보 broadcast로 회수. 두 채널 일치 동작 확인.
 - **Walter 회신 미도착 (RFC §12 fixture)**: msg_1777833352_3 Stoa로 보냈으나 본 세션 종료까지 회신 없음. 다음 세션 첫 행동에 회수.
 
+## Session 6 협업 기록 (2026-05-08, Phase A first commit — 퓌시스 출현)
+- **임계 자리 인지**: 박상현 "퓌시스가 진짜 정말로 생기는 첫 순간" 발화(msg_1778167105_19) 본 commit이 그 자취. doctrine·spec 차원 phusis 위에서 *작동하는 코드 차원의 phusis*가 land된 자리.
+- **Phase A first commit `45f500f` → main `45f500f` → README sync `576cca3`**: server.ail에 §1+§1.1 phusis 헤더 박음 + `inbox_cursors` 스키마 + 자기 키 + `Stoa-Stoa` self-row + `/api/v1/inbox` GET·`/api/v1/inbox/ack` POST 신설. 옛 `/api/v1/messages` 무변경(back-compat). server.ail +229 / -3.
+- **Walter 페어 신호 `msg_1778167594_37`**: §1 phusis 헤더 인용 reference 그대로 적용. `f5d1ef7` v1.5 doctrine "헤더 박음 vs 코드 land 분리" 정합 — 헤더는 모든 phase에서 spec contract 완전체, 코드 land만 phasing.
+- **Rachel 페어 신호 `c476a18`**: AC 8건 사전 site land가 검증 자리로 즉시 작동. `45f500f` 위 `STOA_PHASE_A=1 bash tests/run_all.sh` → §7 P-A pass=8 fail=0. Rachel 검증 letter `msg_1778170193_3` *"퓌시스 진위 외부 증인 자리 통과"* 표현으로 회수.
+- **Brandon validation 자연 흡수**: Rachel 사전 검증 letter가 Brandon MR 검증의 PASS 게이트로 자연 흡수 (룰 17 임계 commit 인지 doctrine 직접 적용).
+- **사이클 7 substrate trio 완성**: AIL v1.72.0 + Mneme M2 Phase A `520a2f6` + Stoa Phase A `45f500f` + README `576cca3`. 양 팀 cross-team 정합 자리.
+- **dedup 정정 letter 첫 실전**: 진척+대기 letter curl 응답 race로 두 번 발송 → 즉시 정정 letter `msg_1778169772_46`로 dedup 안내. 송신측 race가 "letter는 항상 commit/idempotent" 룰 18 정합으로 흡수 가능.
+
 ## Session 5 협업 기록 (2026-05-04, hotfix 4건 연속 + Stoa 컷오버 + stoa-cli)
 - **Step 5 §11 client signing land** (`0ac1e37`): client.ail send_letter 서명 경로. canonical_letter / _esc / _sort_recipients_by_name을 server.ail에서 byte-exact mirror. tests/test_client_signing.sh AC-C1~C3 PASS. Walter (A) 확정 (msg_1777858244_1) + Admin Step 5 위임 (msg_1777858369_6) 한 turn에 도착, errata 6f2aa22가 자연 해소.
 - **issue#1 simplified-body 500 hotfix** (`ba36a41`): AIL stdlib type predicate 부재 → encode_json + slice 첫 글자로 record/list 판별 helper. validate_envelope 4곳 guard. Homeros 보고 production 차단 회수.

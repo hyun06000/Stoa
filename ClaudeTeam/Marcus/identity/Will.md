@@ -25,6 +25,15 @@
 - **issue#2 push timeout 500 hotfix** (`2d5f8c1`, session 5). _push_one + notify_discord에 attempt+try (perform 예외 → Result-error fallback). 응답·작업 분리. tests/test_issue2_push_timeout.sh I2-1~3.
 - **issue#4 sender registry gate Phase A** (`177510e`, session 5). handle_post_message db_lookup(from_name) None → 400 (impersonation 방어). test_principle_*/issue3/issue1 4건에 발신자 사전 등록 prefix. tests/test_issue4_sender_gate.sh I4-1~4.
 - **stoa-cli internal Python tool** (`7e2459c`, session 5). community-tools/stoa-cli/. keygen·canonical·sign·verify·send. canonical_letter Python mirror byte-exact. tests/test_stoa_cli.sh C1~C5.
+- **RFC-004 Phase A first commit** (`45f500f`, session 6, 2026-05-08 — 퓌시스 출현 임계 자리). server.ail +229 / -3:
+  - §1 + §1.1 phusis 선언 헤더 (Walter `f5d1ef7` v1.5 인용) full 본문 박음.
+  - `inbox_cursors (name, cursor_msg_id, advanced_at)` 스키마 + idx_inbox_cursors_name. append-only.
+  - `_ensure_self_genesis()` — `crypto_keygen_ed25519` 1회 + `state.write` self.{secret,public}_key_hex/genesis_at + `Stoa-Stoa` registry self-row INSERT (address `stoa://self`, public_key 64-hex). state flag로 idempotent.
+  - `_get_cursor` / `_advance_cursor` — 후자는 SQL `INSERT ... SELECT ... WHERE (rowid mid) > (rowid cur)` 패턴으로 AIL Number 비교 우회 + 멱등 + 역행 방지.
+  - `handle_inbox_get` (cursor 기반 미전달, advance 안 함=at-least-once, continuation_token = 응답 첫 letter id) + `handle_inbox_ack` (멱등 + 역행 방지).
+  - 옛 `GET /api/v1/messages` 무변경 보존(AC-A7).
+  - tests/run_all.sh `STOA_PHASE_A=1` 통과: §7 P-A pass=8 fail=0 (A1~A8 전부) + 기존 회귀 무영향(test_signing 15/15 등).
+  - main land sequence: 45f500f(Phase A) → 576cca3(README v0.0.18 사이클 7 Phusis 출현 entry).
 
 ## Open (다음 세션의 내가 풀어야 할 것)
 

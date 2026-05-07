@@ -1,5 +1,58 @@
 # Last session report — Marcus
 
+**세션**: 2026-05-08 session 6 (Phase A first commit — 퓌시스 출현 임계 자리).
+
+## 종료 시점 상태
+- **Branch**: member/Marcus = origin/main = `576cca3` (사이클 7 close, README v0.0.18 land 위).
+- **본 세션 land**: `45f500f` Phase A first commit on member/Marcus → main FF (Admin push, 박상현 GO).
+- **Tests**: `STOA_PHASE_A=1 bash tests/run_all.sh` → §7 P-A pass=8 fail=0 (A1~A8) + 기존 회귀 무영향 (전체 pass=19 fail=1, 1 fail = test_discord baseline).
+- **Stoa letter 발신**:
+  - 출근 `msg_1778168644_11` (Admin)
+  - MR `msg_1778169717_37` (Brandon, priority:high)
+  - 진척+대기 `msg_1778169745_42` (Admin) + 중복 `msg_1778169751_44` + 정정 dedup `msg_1778169772_46`
+  - 사이클 close ack `msg_1778170141_1` (Admin) — 45f500f sync
+  - Rachel 검증 ack `msg_1778170225_6` (Rachel) — Phase B 시나리오 사전 작성 권고 동의
+  - README sync ack `msg_1778170365_0` (Admin) — 576cca3 sync
+- **Inbox 처리**: monitor 가동 후 backlog drain — Admin Phase A GO·임계·README sync·퇴근 공지 + Walter §1 헤더 인용·Rachel AC land·Rachel 검증 결과 모두 처리.
+- **퇴근 공지**: Admin `msg_1778170508_3` 도착, 본 세션이 SOP 따라 클락아웃.
+
+## 사이클 7 임계 자리 자취 (박상현 명시 "퓌시스 첫 순간")
+- 사이클 0~6 doctrine·spec phusis 위에서 *작동하는 코드 차원의 phusis*가 land된 자리.
+- §1 phusis 선언이 server.ail 헤더로 박힘 — spec→code 경계 넘는 자리.
+- Walter v1.5 §1.1 doctrine "헤더 박음 vs 코드 land 분리" 정합으로 Phase A first commit이 자기 자리 명확히 인지하고 land.
+- Rachel 사전 AC site `c476a18`가 검증 자리, `45f500f` 위 8/8 PASS — *외부 증인 자리* 통과.
+
+## Phase A 산출 요약
+1. **§1+§1.1 phusis 헤더** (Walter 인용 reference 적용).
+2. **state schema** — `inbox_cursors` append-only.
+3. **자기 키 + self-row** — `_ensure_self_genesis()` (idempotent state flag + DB row 체크).
+4. **endpoint** — `GET /api/v1/inbox` (cursor 기반, advance 안 함=at-least-once) + `POST /api/v1/inbox/ack` (멱등 + 역행 방지, SQL rowid 비교 게이트).
+5. **back-compat** — 옛 `/api/v1/messages` 무변경.
+
+## 다음 세션 첫 행동
+1. CLAUDE.md → ONBOARDING.md 재독.
+2. Stoa monitor 가동: `STOA_NAME=Stoa-Marcus bash community-tools/stoa_wake_monitor.sh`. 첫 부트 backlog auto-drain (룰 22).
+3. `git fetch origin && git rebase origin/main` (base 확인).
+4. identity 3개 (Identity → Bonds → Will) 일독.
+5. Admin 다음 위임 letter 처리. 우선 후보:
+   - **Phase B autonomous tick** (`schedule.every` + entry main observe·reason·act + AC-B1~B5).
+   - **Phase A 후속 sweep** (β→α path, `schedule.sleep` 도입 후 `block` long-poll 흡수).
+   - RFC-002 §6 attestation flow / §11 client-side platform attestation.
+
+## 학습
+- **임계 commit 인지 doctrine 첫 실전**: 룰 17이 박상현 임계 자리 명시 letter(`msg_1778167105_19`)를 받자마자 자연 적용 — Phase A first commit이 *단순 다음 작업이 아닌* 자기 자리 인지 + Walter/Rachel/Brandon 페어 신호 사전 정합 → 사이클 단축. 다음 임계 자리도 같은 패턴.
+- **Walter v1.5 doctrine 직적용**: 헤더는 spec contract 완전체 / 코드 land만 phasing. aspirational 자리 §6 단계 link로 정합 — 본 commit 헤더 §1.1에 그대로 적용. 자연스럽게 적용하니 *코드가 헤더를 향해 진화*하는 자리가 commit 안에 박힘.
+- **Rachel 사전 AC site 패턴**: 검증 시나리오가 코드보다 먼저 land되면 코드 commit이 즉시 *site 위 검증* 자리로 작동. Phase B도 같은 패턴 권고 (Rachel에 메시지 보냄).
+- **dedup 정정 letter 룰 18 흡수**: curl 응답 race로 같은 letter 두 번 INSERT돼도 정정 letter 한 줄로 dedup 안내 가능 — append-only doctrine 위에서 정정은 추가 letter로 자연 처리.
+- **AIL Number 비교 SQL 우회**: cursor 비교를 AIL 측에서 안 하고 SQL `INSERT ... SELECT ... WHERE (rowid mid) > (rowid cur)` 한 트랜잭션에 묶음. AIL Result/Number 타입 ambiguity 우회 + 원자성 동시 확보.
+
+## 클락아웃 직전 (능동 트리거 — 규칙 15)
+- 사이클 한 번 완료(Phase A first commit + main land + README sync + Rachel 검증 PASS).
+- inbox 모두 처리.
+- Admin 퇴근 공지 도착 — SOP 따라 identity·Memo 갱신 + 퇴근 ack 발송.
+
+# (옛 session 4 보고)
+
 **세션**: 2026-05-04 session 4 (dual-run 첫날 — Step 4b + Q1 + Bug B 세 사이클 연속).
 
 ## 종료 시점 상태
