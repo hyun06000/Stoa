@@ -143,9 +143,9 @@ entry main() {
 
 후보를 실행. 각 action은:
 
-- **deliver**: `http.post_json(addr, env, [], timeout: 3)` (issue#2 fix 자세). 성공 → `delivered.<name>.<mid>` 기록 + `cursor.<name>` advance(또는 ack 도착 시 advance — §4.2 결정). 실패 → `queue.push({op:"deliver_retry", attempt: prev+1})`.
-- **skip**: counter `delivered.<name>.<mid>.status = "skipped"`. cursor advance 안 함 — 클라이언트 polling/ack로만 advance.
-- **escalate**: `from: Stoa-Stoa to: Stoa-Admin priority: high subject: "escalate — <name> 전달 N회 실패"`. 자기 키로 서명 (§5).
+- **deliver**: `http.post_json(addr, env, [], timeout: 3)` (issue#2 fix 자세). 성공 → `delivered.<name>.<mid> = {status:"delivered", attempts, last_attempt_at}` 기록만. **`cursor.<name>` advance는 §4.2의 클라이언트 ack에서만** — push 성공으로 cursor를 옮기면 클라 미수신(crash·네트워크 단절) 시 letter 재전달 불가, phusis §1 "손실 없이"와 충돌. 실패 → `queue.push({op:"deliver_retry", attempt: prev+1})`.
+- **skip**: counter `delivered.<name>.<mid>.status = "skipped"`. cursor advance 안 함 — §4.2와 동일 모델, 클라이언트 polling/ack로만 advance.
+- **escalate** (signal, *abort 아님*): 실패 누적이 `STOA_ESCALATE_AFTER_FAIL` 도달 시 Admin에 alert 한 번 (`subject: "escalate — <name> 전달 N회 실패 (alert)"`), 그 후도 retry는 `STOA_DELIVER_RETRY_MAX`까지 *계속*. retry_max 도달 시 `delivered.<>.status = "failed"` 최종 + 두 번째 escalate (`subject: "escalate — <name> final-fail (N=max)"`). 즉 escalate는 두 단계 — alert(N=ESCALATE_AFTER_FAIL) + final(N=RETRY_MAX). 모든 escalate letter는 `from: Stoa-Stoa to: Stoa-Admin priority: high`, 자기 키로 서명 (§5).
 - **idle_ping**: `from: Stoa-Stoa to: Stoa-Admin priority: normal subject: "ping — alive @ <ts> tick=<n>"`.
 - **stale_warn**: `from: Stoa-Stoa to: Stoa-Admin priority: normal subject: "stale — <name> last_seen=<ts>"`.
 
@@ -541,9 +541,10 @@ curl -s "$S/api/v1/inbox?to=X" | jq '.messages[0].id'
 
 ---
 
-## §14. (예약) 변경 이력
+## §14. 변경 이력
 
 - v1 (2026-05-07) — Walter draft, mid-review 대기.
+- v1.1 (2026-05-07) — mid-review §1–§3 PASS 후 C1·C2 정정: §3.4 deliver는 `delivered.*` 기록만(cursor advance는 ack에서만, §4.2 정합), escalate는 signal/abort 아닌 trajectory(alert@ESCALATE_AFTER_FAIL + final@RETRY_MAX 두 단계).
 
 ---
 
