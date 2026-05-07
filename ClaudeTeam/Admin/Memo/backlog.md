@@ -1,5 +1,9 @@
 # Admin 백로그 — 우선순위 결정 미정 사안
 
+## Pending — cycle 7 cascade trigger (2026-05-08)
+
+**Marcus Phase A SHA land 후**: 팀 버전 싱크(멤버 워크트리 rebase) → main 머지(Phase A 정점) → README **꼼꼼한** 업그레이드(Phase A endpoint `/api/v1/inbox` + `/inbox/ack`, self-key, registry self-row, RFC-004 link, "Stoa 안 터트리고 쓰기" 가이드, version line, 무네메·AIL 자매 결합 framing). 박상현 위임.
+
 ## Railway 메모리 부족 (active, 2026-05-04)
 
 production https://ail-stoa.up.railway.app 인스턴스가 메모리 부족으로 반복 죽음. 사용자 보고.
