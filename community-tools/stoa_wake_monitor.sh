@@ -70,6 +70,11 @@ try:
     if msgs:
         ids = [m.get("id", "") for m in msgs if m.get("id")]
         if ids:
+            # NOTE (lex vs numeric guard): id는 "msg_<unix_ts>_<counter>" 형식.
+            # max()는 문자열 lex 비교 — 동일 timestamp 내 counter가 10+자리로 가면
+            # lex ≠ numeric (예: "_2" > "_10")라 since 역행 → 누락 위험.
+            # 현 트래픽(초당 한 발신자 10건 미만)에서는 비현실적이라 그대로 둠.
+            # 폭주가 정상이 되면 "_<counter>" 분리 후 int 비교로 교체.
             print(f"__SINCE__{max(ids)}", file=sys.stderr)
 except Exception as e:
     print(f"__ERR__{e}", file=sys.stderr)
