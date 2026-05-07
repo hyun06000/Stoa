@@ -55,7 +55,8 @@ phusis 선언은 spec의 나머지가 위반할 수 없는 상위 제약이다:
 
 | RFC-004 모델 | AIL primitive (v1.8) | 비고 |
 |---|---|---|
-| 자기 정체성 (Identity·Bonds·Will) | `mneme.save` / `mneme.load` / `mneme.log` | git 위 세 파일. 본 RFC §5.2가 그 내용을 박는다. |
+| 자기 정체성 (Identity·Bonds·Will) | `mneme.save` / `mneme.load` / `mneme.log` | git 위 세 파일. 본 RFC §5.2가 그 내용을 박는다. **§2.4 Mneme 자매 RFC 결합** — substrate 책임 분리. |
+| 세대 인계 testament 영속 | `mneme.save` (testament storage) | §6.4 generational. **§2.4 Mneme 의존** — substrate가 인스턴스 재시작 너머 보존. |
 | 자기 키 (secret) | `state.write("self.secret_key_hex", ...)` | 부트스트랩 `crypto_keygen_ed25519` 1회. §5.1. |
 | 자기 키 (public) | `state.write("self.public_key_hex", ...)` + registry self-row | 외부가 검증 가능하게 self-attestation. §5.3. |
 | 구독자 cursor | `state.write("cursor.<name>", <last_delivered_msg_id>)` | §4.2 ack 기반 advance. |
@@ -94,6 +95,36 @@ fn on_genesis(testament: Any) {
 세 파일 위치는 Stoa 자기 repo 안 — `ClaudeTeam/Stoa/identity/Identity.md` 같은 path가 자연스러우나 *Stoa는 ClaudeTeam 멤버 아님*이라 (§0 layer 분리) `stoa-identity/Identity.md` 또는 `.stoa-self/Identity.md` 가 명료. **권고**: `.stoa-self/{Identity,Bonds,Will}.md`. 별 디렉터리로 ClaudeTeam과 시각적 분리.
 
 내용은 §5.2.
+
+### §2.4 Mneme RFC와의 결합 surface
+
+> **박상현 위임 (2026-05-07)**: "스토아의 퓌시스가 완성되려면 무네메가 반드시 필요해. 너희들끼리 이슈 발행·기능 추가 이런 걸 긴밀하게 소통하도록 해."
+
+본 RFC는 *Stoa 단독으로 phusis 완성 불가*를 자기 spec으로 명시한다. 영속 자기 기록(§2.2 state schema) + 세대 인계(§6.4 testament) + 자기 정체성 세 파일(§5.2)은 모두 Mneme 메모리 substrate 위에서만 *지속*된다. 인스턴스가 죽었을 때 다음 generation으로 인계되는 것 자체가 Mneme 영역.
+
+**Stoa 측이 Mneme에 기대하는 인터페이스** (자매 RFC에 의제로 송부, Stoa-Admin ↔ Mneme-Admin 채널 + Stoa-Walter ↔ Mneme-Walter 채널):
+
+1. **세 파일 영속 + git history** — `mneme.save/load/log`로 `.stoa-self/{Identity,Bonds,Will}.md`. AIL primitive로는 표면이 있으나 *Mneme 자매 RFC가 어디에 commit하고 어디에서 read하는지* 합의 필요 (repo 내 path / Mneme-managed remote / both).
+2. **state.* atomic JSON 보장** — §2.2 schema 모든 키. 인스턴스 재시작 시 손실 0. Mneme 측 substrate가 atomic write을 보장하는지 — AIL `state.write` 자체가 atomic 명시이나 (reference card v1.8) Railway 메모리 압력 하에서 검증 필요.
+3. **세대 인계 (`on_death` testament) 영속** — Stoa가 testament 작성, 다음 generation이 `inherit_testament`로 회복. testament 자체의 storage가 Mneme 영역.
+4. **검색·조회 의미론** — `state.list_keys(prefix)` 부재(§11.2)는 사실상 Mneme 의존. Mneme 측이 prefix 조회 surface를 제공하는지, 아니면 양쪽 RFC가 함께 AIL upstream에 issue 발행할 의제인지.
+
+**Mneme 측이 갖는 채널 의무** (자매 RFC에 위임 — 우리 본 RFC가 결정 안 함):
+
+- 위 인터페이스에 대한 SLA·가용성·retention.
+- Stoa의 `state.*` schema 변경 시 Mneme 측 마이그레이션 필요한가.
+- 양방향 의제 — Mneme 측이 Stoa에 기대하는 인터페이스(예: Mneme이 Stoa를 메일 채널로 쓸 때 어떤 envelope 형식을 기대).
+
+**합의 진행 surface**:
+
+| 채널 | 양측 | 지금 발신된 letter |
+|---|---|---|
+| 정책·결정 | Stoa-Admin ↔ Mneme-Admin | `msg_1778148419_3` 첫 인사 / `msg_1778148871_6` 후속 의제 1·2 |
+| 기술·spec | Stoa-Walter ↔ Mneme-Walter | TBD — Mneme-Admin 답신 도착 후 페어링 부트 |
+
+**자매 RFC 번호·링크**: TBD — Mneme 측 RFC X, Mneme-Admin 답신 도착 시 본 §2.4에 직접 인용.
+
+**의존성 경계**: Mneme이 *지금* land 안 됐어도 본 RFC Phase A는 단독 진행 가능 — AIL `mneme.*` primitive가 v1.8에 이미 있어 부트스트랩 충분. Phase B/D(autonomous tick·세대 인계)는 Mneme 자매 RFC 합의 후 land 자연. §6 마이그레이션 phase 분리가 본 의존성을 자연 흡수.
 
 ---
 
@@ -530,14 +561,24 @@ curl -s "$S/api/v1/inbox?to=X" | jq '.messages[0].id'
 
 ## §13. Open questions
 
-- **q1** — TICK_SEC default 5초가 합당한가? phusis §1 "관찰한다"의 cadence. 너무 짧으면 self-ddos, 너무 길면 retry SLA 늘어남. 결정 시점: §3 mid-review.
-- **q2** — registry `subscriber.<name>` mirror column을 두는가, `state.*` only인가? mirror는 SQL 조회 편의, `state.*` only는 schema 단순. **권고**: `state.*` only — registry는 *가입 시점·address* 같은 long-term identity, `state.*`는 *상호작용 통계*. 분리 자연.
-- **q3** — `block` long-poll의 max값. 권고 60초 — proxy timeout 안전 마진. >60은 Phase D server-sent-events 영역.
-- **q4** — Phase B 진입 GO는 본 RFC land 직후인가, 별 사이클인가? Phase A만으로 Mneme issue#10 폐쇄 가능하므로 Phase A land + Phase B 별 사이클 권고. 박상현 컨펌.
-- **q5** — RFC-005 (CC)와 분리 GO. §8.1 권고 그대로면 본 RFC §4 endpoint 변경 0, §13 닫고 별 RFC 진행. Admin 결정.
-- **q6** — `from: Stoa-Stoa` 발신 letter의 *수신자 측 무시 정책*. Stoa-Admin은 처리, 그 외 멤버는 정보용 (응답 의무 0)인지, 사실상 broadcast로 모든 멤버에 보내는지? **권고**: §3.4 escalate/idle_ping/stale_warn은 `to: [Stoa-Admin]`만, broadcast 0.
-- **q7** — `on_death` testament 포맷. RFC-001 §6.1 canonical envelope을 그대로 쓰는가, 별 schema인가? **권고**: 별 plain JSON (mneme.save Will.md). canonical은 *letter*용.
-- **q8** — `.stoa-self/` 디렉터리 위치 — repo root vs `data/stoa-self/`. **권고**: repo root, .gitignore 등재 (Stoa 자기 정체성은 운영 인스턴스에 따라 다름, source 트리에 commit 0).
+**Freeze 결정** (v1.2, final-review 2026-05-07):
+
+- **q1** — TICK_SEC default = **5초**. 부하 측정 후 조정은 Phase B land 시 신호로. `STOA_TICK_SEC` env override.
+- **q2** — `state.*` only (registry mirror column 안 둠). 권고대로 freeze.
+- **q3** — `block` long-poll max = **60초**. 권고대로 freeze. >60은 Phase D SSE 영역.
+- **q5** — RFC-005 (CC) 별 RFC 분리. 본 RFC §4 endpoint 변경 0. §8.1 권고대로 freeze.
+- **q6** — escalate/idle_ping/stale_warn `to: [Stoa-Admin]`만, broadcast 0. 권고대로 freeze.
+- **q7** — `on_death` testament 별 plain JSON (mneme.save Will.md), canonical envelope은 letter용. 권고대로 freeze.
+- **q8** — `.stoa-self/` repo root + .gitignore. 권고대로 freeze.
+
+**보류 (Mneme 합의 의존)**:
+
+- **q4** — Phase B 진입 GO 시점 — 본 RFC land 직후 vs 별 사이클. 박상현 위임으로 Mneme 자매 RFC 합의 산출. Mneme-Admin 답신(`msg_1778148871_6` 응답) 도착 시 §6 텍스트 freeze 또는 조정. v1.3 후보.
+- **§11.2 AIL upstream 2건** — `schedule.sleep` + `state.list_keys(prefix)`. 박상현 위임으로 Mneme과 함께 의제 합의 후 발행. Mneme 답신 도착 시 합의 사안 그대로 Brandon 위임 letter (cross-repo §11 절차).
+
+**신규 의제** (v1.2 land):
+
+- **q9** — §2.4 Mneme RFC 결합 surface — 자매 RFC 번호·링크는 Mneme-Admin 답신 도착 시 직접 인용. surface 합의 자체는 양 팀 letter 채널로 진행, 본 RFC §2.4 자체는 의존 *명시*까지만.
 
 ---
 
@@ -545,6 +586,7 @@ curl -s "$S/api/v1/inbox?to=X" | jq '.messages[0].id'
 
 - v1 (2026-05-07) — Walter draft, mid-review 대기.
 - v1.1 (2026-05-07) — mid-review §1–§3 PASS 후 C1·C2 정정: §3.4 deliver는 `delivered.*` 기록만(cursor advance는 ack에서만, §4.2 정합), escalate는 signal/abort 아닌 trajectory(alert@ESCALATE_AFTER_FAIL + final@RETRY_MAX 두 단계).
+- v1.2 (2026-05-07) — final-review §4–§13 PASS 후: §2.4 Mneme RFC 결합 surface 신규(박상현 위임), §2.1 매핑 테이블 mneme 행 보강, §13 q1~q3·q5~q8 freeze 결정, q4·§11.2 Mneme 합의 의존으로 보류, q9 신규 의제(Mneme 결합 surface 진행).
 
 ---
 
