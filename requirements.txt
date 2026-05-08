@@ -1,2 +1,2 @@
-ail-interpreter>=1.69.1
+ail-interpreter>=1.72.2
 cryptography>=41.0

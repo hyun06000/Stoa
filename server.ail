@@ -402,6 +402,68 @@ fn _get_content_max_bytes() -> Number {
     return val
 }
 
+// ---------- RFC-004 Phase B env readers ----------
+//
+// autonomous tick 권고 상수 (RFC-004 §3.3·§3.4). env override.
+// _get_tick_sec: schedule.every 주기. 기본 5초 (§13 q1).
+fn _get_tick_sec() -> Number {
+    r = perform env.read("STOA_TICK_SEC")
+    if is_error(r) { return 5 }
+    v = trim(unwrap(r))
+    if v == "" { return 5 }
+    n = to_number(v)
+    if is_error(n) { return 5 }
+    val = unwrap(n)
+    if val <= 0 { return 5 }
+    if val > 86400 { return 86400 }
+    return val
+}
+
+fn _get_idle_ping_interval_s() -> Number {
+    r = perform env.read("STOA_IDLE_PING_INTERVAL_S")
+    if is_error(r) { return 1800 }
+    v = trim(unwrap(r))
+    if v == "" { return 1800 }
+    n = to_number(v)
+    if is_error(n) { return 1800 }
+    val = unwrap(n)
+    if val <= 0 { return 1800 }
+    return val
+}
+
+fn _get_escalate_after_fail() -> Number {
+    r = perform env.read("STOA_ESCALATE_AFTER_FAIL")
+    if is_error(r) { return 3 }
+    v = trim(unwrap(r))
+    if v == "" { return 3 }
+    n = to_number(v)
+    if is_error(n) { return 3 }
+    val = unwrap(n)
+    if val <= 0 { return 3 }
+    return val
+}
+
+fn _get_deliver_retry_max() -> Number {
+    r = perform env.read("STOA_DELIVER_RETRY_MAX")
+    if is_error(r) { return 5 }
+    v = trim(unwrap(r))
+    if v == "" { return 5 }
+    n = to_number(v)
+    if is_error(n) { return 5 }
+    val = unwrap(n)
+    if val <= 0 { return 5 }
+    return val
+}
+
+// _get_self_origin_env: STOA_SELF_ORIGIN env. autonomous tick은 request 문맥
+// 없이 self-host detect 수행 — env-driven origin이 _stoa_origin(req) 자리 대체.
+// 빈 문자열 default (detect off, 보수적 — _is_self_host와 같은 의미론).
+fn _get_self_origin_env() -> Text {
+    r = perform env.read("STOA_SELF_ORIGIN")
+    if is_error(r) { return "" }
+    return trim(unwrap(r))
+}
+
 fn _is_leap_year(y: Number) -> Boolean {
     if y % 400 == 0 { return true }
     if y % 100 == 0 { return false }
@@ -1408,6 +1470,19 @@ fn _push_one(addr: Text, envelope: Any) -> Any {
     }
 }
 
+// _push_one_fast: autonomous tick(`on_tick`) 안 push. timeout 짧게(1s) 잡아 hook
+// budget 초과 차단 — TICK_SEC=1 환경에서 sink port 같은 SYN-hang case 한 번에
+// 흡수 가능. 통상 listener 응답은 ms 단위라 1s로도 충분. 실패 시 다음 tick에
+// retry, 누적 실패는 escalate 트리거 (RFC §3.4).
+fn _push_one_fast(addr: Text, envelope: Any) -> Any {
+    payload = envelope
+    if _is_discord_url(addr) { payload = _envelope_to_discord(envelope) }
+    return attempt {
+        try perform http.post_json(addr, payload, [], timeout: 1)
+        try error("push failed: listener unreachable or timeout (fast)")
+    }
+}
+
 // _is_self_host: 수신자 address가 자기 host(현재 요청 origin)와 같은가.
 // issue#3 — 컨테이너 내부 → public hostname HTTPS loopback이 TCP/TLS 단계에서
 // hang. 자기 host는 push 자체가 불필요(letter는 같은 DB에 이미 INSERT). skip이
@@ -1461,13 +1536,18 @@ fn msg_to_json(msg: Any) -> Text {
 // ---------- handlers ----------
 
 fn handle_health(req: Any) -> [Any] {
-    // bridge v0 §4.1 wake bundle inflate 가시 — 운영자가 boot 회복 자취 외부 점검.
-    // last_wake_inflated_at == "" → 아직 inflate 0 (또는 Phase B/C 미land).
+    // bridge v0 §4.1 wake bundle inflate 가시 + RFC-004 §3.4 autonomous tick 가시.
+    // last_wake_inflated_at == "" → inflate 0 (Phase B/C wire-up 전).
+    // last_tick_at == "" → on_tick 미발화 (autonomous loop 미가동, AC-B5 surface).
     inflated = _get_self_wake_inflated_at()
+    last_tick = ""
+    tr = perform state.read("health.last_tick_at")
+    if not is_error(tr) { last_tick = to_text(unwrap(tr)) }
     body = make_record([
         ["status", "ok"],
-        ["version", "0.0.16"],
-        ["last_wake_inflated_at", inflated]
+        ["version", "0.0.17"],
+        ["last_wake_inflated_at", inflated],
+        ["last_tick_at", last_tick]
     ])
     return json_ok(200, msg_to_json(body))
 }
@@ -2367,9 +2447,237 @@ fn route(req: Any) -> [Any] {
     return err_json(404, "not found")
 }
 
+// ============================================================================
+// RFC-004 Phase B — autonomous main loop (observe → reason → act)
+// ============================================================================
+//
+// AIL `ail run` + `evolve` 환경에서 schedule.every가 작동 (v1.72.2+). on_birth
+// 시점에 cadence 등록, on_tick이 매 N초 발화. RFC-004 §3·§6.2 본 구현.
+
+// _emit_self_letter: from=Stoa-Stoa 자기 letter 1건 INSERT. msg_id 자동 할당,
+// recipient row 1건. 본 단계 무서명 (Phase C에서 ed25519 자기서명 추가). 응답 0
+// (autonomous emit, response 회수 무관).
+fn _emit_self_letter(to_name: Text, to_addr: Text, content: Text) -> Text {
+    _init_db()
+    msg_id = make_id()
+    ts = now_iso()
+    db_insert_letter(msg_id, "Stoa-Stoa", "stoa://self", content, ts, None, None)
+    db_insert_recipient(msg_id, to_name, to_addr)
+    return msg_id
+}
+
+// _admin_address: registry에서 Stoa-Admin address 회수 (escalate·idle_ping 송신
+// 대상). registry 부재 시 fallback 빈 문자열 — 호출자가 빈 문자열이면 emit skip.
+fn _admin_address() -> Text {
+    row = db_lookup("Stoa-Admin")
+    if row == None { return "" }
+    return to_text(get(row, "address"))
+}
+
+// 상태 추적은 SQLite `delivery_log` 테이블에 — AIL 1.72.2 state.* 파일 기반 IO
+// 가 pump의 빠른 read/write 사이클에서 race-prone (state.has가 file 존재시에도
+// false 반환되는 자리 발견). DB는 atomic INSERT/SELECT로 신뢰.
+//
+//   delivery_log (name TEXT, msg_id TEXT, status TEXT, attempts INT, last_at TEXT,
+//                 PRIMARY KEY (name, msg_id))
+//   status: "delivered" | "failed" | "skipped" | "pending"
+//   PRIMARY KEY로 멱등 INSERT OR REPLACE.
+fn _ensure_delivery_log() -> Any {
+    db = get_db_file()
+    perform db.execute(db,
+        "CREATE TABLE IF NOT EXISTS delivery_log (name TEXT NOT NULL, msg_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL, last_at TEXT NOT NULL, PRIMARY KEY (name, msg_id))")
+    return None
+}
+
+// _delivery_pending: name 앞 letter 중 *terminal status 안 가진* 것만 반환 (push
+// 대상). delivery_log JOIN으로 SQL level filter — AIL 측 비교 0.
+fn _delivery_pending(name: Text, limit: Number) -> [Any] {
+    _ensure_delivery_log()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT l.id, l.from_name, l.from_address, l.content, l.created_at, l.signature, l.nonce FROM letters l JOIN recipients rcp ON rcp.letter_id = l.id WHERE rcp.name = ? AND l.id NOT IN (SELECT msg_id FROM delivery_log WHERE name = rcp.name AND status IN ('delivered','skipped','failed')) ORDER BY l.rowid ASC LIMIT ?",
+        [name, limit])
+    if is_error(r) { return [] }
+    out = []
+    for row in unwrap(r) {
+        out = append(out, _row_to_envelope(row))
+    }
+    return out
+}
+
+fn _delivery_attempts(name: Text, mid: Text) -> Number {
+    _ensure_delivery_log()
+    db = get_db_file()
+    r = perform db.query(db,
+        "SELECT attempts FROM delivery_log WHERE name = ? AND msg_id = ? LIMIT 1",
+        [name, mid])
+    if is_error(r) { return 0 }
+    rows = unwrap(r)
+    if length(rows) == 0 { return 0 }
+    return rows[0][0]
+}
+
+fn _delivery_upsert(name: Text, mid: Text, status: Text, attempts: Number, ts: Text) -> Any {
+    _ensure_delivery_log()
+    db = get_db_file()
+    perform db.execute(db,
+        "INSERT OR REPLACE INTO delivery_log (name, msg_id, status, attempts, last_at) VALUES (?, ?, ?, ?, ?)",
+        [name, mid, status, attempts, ts])
+    return None
+}
+
+// _maybe_escalate: per-letter 시도 횟수에 따라 alert / final escalate letter
+// 발신. dedup은 `delivered.<>.<>.status` 기록으로 — alert가 한 번 fire되면
+// status는 여전히 "failed" 누적, 후속 fail에서 attempts == retry_max 도달 시
+// final fire. alert/final 발사 자취는 letter 자체 (Admin 인박스에 박힘).
+fn _maybe_escalate(name: Text, mid: Text, attempts: Number) -> Any {
+    // Stoa-Admin은 escalation 채널 자체 — 자기 자신을 escalate 시 loop. 차단.
+    if name == "Stoa-Admin" { return None }
+    admin_addr = _admin_address()
+    if admin_addr == "" { return None }
+    after = _get_escalate_after_fail()
+    retry_max = _get_deliver_retry_max()
+    // alert 단계: attempts가 ESCALATE_AFTER_FAIL 도달한 *그 시점*에 한 번.
+    if attempts == after and after < retry_max {
+        body = join([
+            "subject: escalate — ", name, " 전달 ", to_text(after), "회 실패 (alert)\n",
+            "priority: high\n",
+            "---\n\n",
+            "subscriber=", name, " mid=", mid, " attempts=", to_text(attempts), "\n",
+            "RFC-004 §3.4 escalate alert. retry는 retry_max=", to_text(retry_max), " 까지 계속.\n",
+            "\n---END-OF-CONVERSATION---"
+        ], "")
+        _emit_self_letter("Stoa-Admin", admin_addr, body)
+        return None
+    }
+    // final 단계: attempts가 RETRY_MAX 도달 시 한 번. status도 "failed"로 굳힘.
+    if attempts == retry_max {
+        body = join([
+            "subject: escalate — ", name, " final-fail (N=max)\n",
+            "priority: high\n",
+            "---\n\n",
+            "subscriber=", name, " mid=", mid, " attempts=", to_text(attempts), "\n",
+            "RFC-004 §3.4 escalate final. delivered.<>.status='failed' 굳힘. retry 중단.\n",
+            "\n---END-OF-CONVERSATION---"
+        ], "")
+        _emit_self_letter("Stoa-Admin", admin_addr, body)
+        return None
+    }
+    return None
+}
+
+// _pump_subscriber: 한 subscriber 앞 미전달 letter 시도 (deliver / skip).
+// cursor 위치는 advance 안 함 (§4.2 — 클라이언트 ack로만 advance, push는
+// `delivered.*` 기록만). 이미 status == "delivered"|"failed"|"skipped"인
+// letter는 skip (idempotent). 자기 host address는 issue#3 doctrine 정합으로
+// status="skipped" + push 시도 0.
+fn _pump_subscriber(sub: Any, self_origin: Text) -> Any {
+    name = to_text(get(sub, "name"))
+    addr = to_text(get(sub, "address"))
+    // self-row Stoa-Stoa는 pump 대상 0. Stoa-Admin은 escalation 채널 자체 —
+    // 자기 인박스에 박힌 escalate letter를 pump가 또 push하면 (1) 의미 0 (Admin은
+    // 자기 polling으로 회수), (2) admin address가 종종 dummy/non-routable (test
+    // fixture, 운영 시 admin이 polling subscriber)라 push가 hung → on_tick budget
+    // 초과 → escalate 자체 차단되는 deadlock. Admin pump 차단으로 본 cycle 끊음.
+    if name == "Stoa-Stoa" { return None }
+    if name == "Stoa-Admin" { return None }
+    msgs = _delivery_pending(name, 50)
+    retry_max = _get_deliver_retry_max()
+    ts = now_iso()
+    for env_obj in msgs {
+        mid = to_text(get(env_obj, "id"))
+        // self-host skip — push 시도 0, status="skipped".
+        if _is_self_host(addr, self_origin) {
+            _delivery_upsert(name, mid, "skipped", 0, ts)
+            continue
+        }
+        prev_attempts = _delivery_attempts(name, mid)
+        if prev_attempts >= retry_max { continue }
+        attempt_n = prev_attempts + 1
+        // push 시도 (_push_one_fast: timeout=1s, autonomous tick budget 친화).
+        push_r = _push_one_fast(addr, env_obj)
+        if is_error(push_r) {
+            if attempt_n >= retry_max {
+                _delivery_upsert(name, mid, "failed", attempt_n, ts)
+            } else {
+                _delivery_upsert(name, mid, "pending", attempt_n, ts)
+            }
+            _maybe_escalate(name, mid, attempt_n)
+        } else {
+            _delivery_upsert(name, mid, "delivered", attempt_n, ts)
+        }
+    }
+    return None
+}
+
+// _autonomous_observe: §3.2 — health.last_tick_at 갱신 + 다음 행동을 위한
+// observation 자리 (현재는 last_tick_at 갱신만, autonomous tick 가시 surface).
+fn _autonomous_observe() -> Any {
+    perform state.write("health.last_tick_at", now_iso())
+    return None
+}
+
+// _autonomous_act: §3.3·§3.4 — registered subscriber 모두에 대해 pump 실행 +
+// idle_ping 검사. self-row Stoa-Stoa는 pump 대상 0.
+fn _autonomous_act() -> Any {
+    self_origin = _get_self_origin_env()
+    subs = db_list_registry()
+    for s in subs {
+        _pump_subscriber(s, self_origin)
+    }
+    // idle_ping: IDLE_PING_INTERVAL_S 경과 시 한 번. 자기 last_idle_ping_at unix
+    // 와 현재 unix를 SQL level에서 비교해 boolean 결과를 받는다 — AIL Number
+    // 비교 자리 우회. 먼저 emit 가능 시점인지 SQL로 확인 후 emit.
+    interval = _get_idle_ping_interval_s()
+    last_iso_r = perform state.read("health.last_idle_ping_at")
+    last_iso = ""
+    if not is_error(last_iso_r) { last_iso = to_text(unwrap(last_iso_r)) }
+    db = get_db_file()
+    // SQL: SELECT 1 WHERE strftime('%s','now') - <last_unix> >= <interval>
+    // last_iso가 빈 문자열이면 "1970-01-01" 시작점 가정 — 즉시 fire.
+    cmp_iso = last_iso
+    if cmp_iso == "" { cmp_iso = "1970-01-01T00:00:00Z" }
+    cmp_r = perform db.query(db,
+        "SELECT 1 WHERE CAST(strftime('%s','now') AS INTEGER) - CAST(strftime('%s', ?) AS INTEGER) >= ?",
+        [cmp_iso, interval])
+    if is_error(cmp_r) { return None }
+    cmp_rows = unwrap(cmp_r)
+    if length(cmp_rows) == 0 { return None }
+    // 발화 시점 도달.
+    admin_addr = _admin_address()
+    if admin_addr == "" { return None }
+    body = join([
+        "subject: ping — alive @ ", now_iso(), "\n",
+        "priority: normal\n",
+        "---\n\n",
+        "RFC-004 §3.4 idle_ping. interval=", to_text(interval), "s.\n",
+        "\n---END-OF-CONVERSATION---"
+    ], "")
+    _emit_self_letter("Stoa-Admin", admin_addr, body)
+    perform state.write("health.last_idle_ping_at", now_iso())
+    return None
+}
+
+// on_birth: agentic runtime 첫 부팅 hook. schedule.every 등록 + DB 초기화 + 자기
+// genesis 보장. on_genesis 보다 on_birth가 *항상* 호출 (testament 인계 분기 0).
+fn on_birth() -> Any {
+    _init_db()
+    sec = _get_tick_sec()
+    perform schedule.every(sec)
+    return None
+}
+
+// on_tick: 매 schedule.every 주기에 발화. observe → act. reason은 act 안에 흡수
+// (각 pump이 자기 분류 — RFC §3.3 행동 후보 직접 반영).
+fn on_tick(state: Any) -> Any {
+    _autonomous_observe()
+    _autonomous_act()
+    return None
+}
+
 evolve stoa {
     listen: 8090
-    effects: [http.respond, http.post_json, db.execute, db.query, clock.now, state.read, state.write, env.read]
+    effects: [http.respond, http.post_json, db.execute, db.query, clock.now, state.read, state.write, state.has, env.read, schedule.every]
     metric: error_rate
     when request_received(req) {
         result = route(req)
