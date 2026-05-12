@@ -2477,6 +2477,15 @@ fn route(req: Any) -> [Any] {
         id = slice(path, 22, length(path))
         return handle_lookup_platform_key(req, id)
     }
+    // 4차 다운 hotfix (d) (2026-05-12) — `/inbox/<name>` 경로 진단.
+    // Mneme team이 옛 flat endpoint(`/inbox/<name>`)로 polling/push 중 (Stoa#6
+    // envelope schema 마이그레이션 lag). default "not found"는 무엇이 잘못인지
+    // 침묵 → 호출자 로그에서 즉시 정정 trigger 0. 본 path 한정 명시적 메시지로
+    // 자기 정정 유도.
+    if starts_with(path, "/inbox/") {
+        return err_json(404,
+            "endpoint /inbox/<name> deprecated. use POST /api/v1/messages with envelope schema (from/to/content); poll via GET /api/v1/messages?to=<name>&since_id=<n>. see docs/migrations/flat-to-envelope.md.")
+    }
     return err_json(404, "not found")
 }
 
