@@ -1486,10 +1486,43 @@ fn _push_one_fast(addr: Text, envelope: Any) -> Any {
 // _is_self_host: 수신자 address가 자기 host(현재 요청 origin)와 같은가.
 // issue#3 — 컨테이너 내부 → public hostname HTTPS loopback이 TCP/TLS 단계에서
 // hang. 자기 host는 push 자체가 불필요(letter는 같은 DB에 이미 INSERT). skip이
-// 가장 가벼운 fix. self_origin이 빈 문자열이면 detect off (보수적 default).
+// 가장 가벼운 fix.
+//
+// 4차 다운 hotfix (c) fallback A (2026-05-12) — self_origin이 빈 문자열일 때
+// 옛 동작은 *항상 false* → `STOA_SELF_ORIGIN` 미설정 + autonomous tick path에서
+// `_pump_subscriber`가 자기 self-row(Stoa-Stoa)·자기 listener 주소에까지 push
+// 시도 → Railway public hostname loopback hang → 매 tick urllib 객체 leak →
+// OOM kill 4일 후 (Stoa#11 RCA).
+//
+// fallback A: env 빈 문자열이면 registry `Stoa-Stoa` self-row의 address를 회수해
+// 그 prefix로 self-host 판정. self-row가 _stoa_origin/inbox/Stoa-Stoa 형식이라
+// host prefix 일치 — 자기 host로 가는 모든 push 차단. env 없이도 leak trigger
+// 제거. (B 정교판: 첫 request Host header latch는 사이클 9.)
+//
+// db_lookup 실패 (registry 누락·DB error)이면 옛 동작(false)으로 떨어져 가용성
+// 보존 — fallback의 fallback. self-row는 on_birth/_init_db 자리에서 항상 INSERT
+// 되므로 정상 path에서는 None 안 됨.
 fn _is_self_host(addr: Text, self_origin: Text) -> Boolean {
-    if self_origin == "" { return false }
-    return starts_with(addr, self_origin)
+    if self_origin != "" {
+        return starts_with(addr, self_origin)
+    }
+    // fallback A — registry self-row address로 비교.
+    row = db_lookup("Stoa-Stoa")
+    if row == None { return false }
+    self_addr = to_text(get(row, "address"))
+    if self_addr == "" { return false }
+    // self_addr는 보통 https://host/inbox/Stoa-Stoa 형식 — host prefix만 떼서
+    // 비교하려면 path 구분점이 필요. 단순화: addr가 self_addr와 동일하거나
+    // self_addr의 scheme://host prefix를 공유하면 self. parse_url builtin 없이
+    // "/inbox/" 위치까지 자르는 휴리스틱.
+    cut_at = index_of(self_addr, "/inbox/")
+    if cut_at < 0 {
+        // self-row가 /inbox/ 자리 없으면 exact match만.
+        return addr == self_addr
+    }
+    self_origin_inferred = slice(self_addr, 0, cut_at)
+    if self_origin_inferred == "" { return false }
+    return starts_with(addr, self_origin_inferred)
 }
 
 // push_to_recipients: issue#3 hotfix — self-host skip + skipped 카운터.
