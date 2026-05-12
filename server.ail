@@ -2667,11 +2667,30 @@ fn on_birth() -> Any {
     return None
 }
 
-// on_tick: 매 schedule.every 주기에 발화. observe → act. reason은 act 안에 흡수
-// (각 pump이 자기 분류 — RFC §3.3 행동 후보 직접 반영).
-fn on_tick(state: Any) -> Any {
+// _on_tick_body: on_tick의 실제 본문. outer attempt+try가 perform 예외를
+// 흡수할 수 있게 별도 함수로 분리 (try 표현이 단일 expression을 감싸므로).
+fn _on_tick_body() -> Any {
     _autonomous_observe()
     _autonomous_act()
+    return None
+}
+
+// on_tick: 매 schedule.every 주기에 발화. observe → act. reason은 act 안에 흡수
+// (각 pump이 자기 분류 — RFC §3.3 행동 후보 직접 반영).
+//
+// 4차 다운 hotfix (2026-05-12) — sub-call 안 perform 예외(self-loop urllib
+// timeout 등)가 evolve runtime으로 새 `[evolve] on_tick failed` 누적 → 메모리
+// leak → OOM kill. outer attempt+try로 어떤 perform 예외도 흡수해 evolve
+// runtime이 unhandled로 받지 않게 한다. (b)(c)(d)는 후속 commit 분리.
+//
+// AC-B5: 흡수 경로에서도 `health.last_tick_at`를 advance시켜 autonomous loop
+// 가동 신호를 유지 (`_autonomous_observe`가 도달 전 실패해도 alive surface).
+// _push_one_fast/_emit_self_letter의 effect 예외 클래스 누락은 (b) 트랙.
+fn on_tick(state: Any) -> Any {
+    attempt {
+        try _on_tick_body()
+        try perform state.write("health.last_tick_at", now_iso())
+    }
     return None
 }
 
