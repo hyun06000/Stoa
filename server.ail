@@ -2454,15 +2454,37 @@ fn route(req: Any) -> [Any] {
 // AIL `ail run` + `evolve` 환경에서 schedule.every가 작동 (v1.72.2+). on_birth
 // 시점에 cadence 등록, on_tick이 매 N초 발화. RFC-004 §3·§6.2 본 구현.
 
+// _emit_self_letter_body: _emit_self_letter의 INSERT 두 건 본문. db.execute가
+// effect 예외 raise할 수 있어 별도 함수로 분리 — try 표현이 단일 expression을
+// 감싸므로 (block form `try { ... }` 미지원, on_tick / _on_tick_body 동일 패턴).
+fn _emit_self_letter_body(msg_id: Text, ts: Text, to_name: Text, to_addr: Text, content: Text) -> Any {
+    db_insert_letter(msg_id, "Stoa-Stoa", "stoa://self", content, ts, None, None)
+    db_insert_recipient(msg_id, to_name, to_addr)
+    return None
+}
+
 // _emit_self_letter: from=Stoa-Stoa 자기 letter 1건 INSERT. msg_id 자동 할당,
 // recipient row 1건. 본 단계 무서명 (Phase C에서 ed25519 자기서명 추가). 응답 0
 // (autonomous emit, response 회수 무관).
+//
+// 4차 다운 hotfix (b) (2026-05-12) — `db_insert_letter`/`db_insert_recipient`가
+// `perform db.execute`을 직접 호출하는데 SQLite lock contention·disk full 등에서
+// effect 예외 raise 가능. autonomous tick path(idle_ping·escalate alert·final)에서
+// 발생하면 on_tick outer attempt(a)가 흡수해 evolve runtime은 안 죽지만, stack을
+// 위로 거슬러 빠져나가는 동안 `_autonomous_observe`의 last_tick_at advance가
+// 누락될 자리는 (a)가 catch trace에서 보장. 본 (b)는 그 이전 단계 — emit 자체가
+// 흡수해 후속 sibling 동작(다른 subscriber pump 등)이 한 INSERT 실패로 전체
+// 차단되지 않게.
+// 반환값은 msg_id Text — 실패 시 빈 문자열 ("")로 굳혀 호출자가 자취 인식.
 fn _emit_self_letter(to_name: Text, to_addr: Text, content: Text) -> Text {
     _init_db()
     msg_id = make_id()
     ts = now_iso()
-    db_insert_letter(msg_id, "Stoa-Stoa", "stoa://self", content, ts, None, None)
-    db_insert_recipient(msg_id, to_name, to_addr)
+    r = attempt {
+        try _emit_self_letter_body(msg_id, ts, to_name, to_addr, content)
+        try error("emit_self_letter failed")
+    }
+    if is_error(r) { return "" }
     return msg_id
 }
 
