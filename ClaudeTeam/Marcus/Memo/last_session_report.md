@@ -1,5 +1,38 @@
 # Last session report — Marcus
 
+**세션**: 2026-05-12 — Stoa 4차 다운 hotfix (a) 트랙 단독 commit (우회 채널 directive, Stoa down으로 letter 발신 차단).
+
+## 본 세션 land — `1c9aa7b`
+
+- **브랜치**: `member/Marcus` (worktree `/Users/user/Desktop/code/personal/Stoa/Marcus/`).
+- **SHA**: `1c9aa7b` (위 `f065502` Phase B 위에 쌓임).
+- **변경**: `server.ail` +21 / -2 — `_on_tick_body()` 헬퍼 추출 + `on_tick`에 outer `attempt { try _on_tick_body(); try perform state.write("health.last_tick_at", now_iso()) }`.
+- **AC 통과 노트**:
+  - on_tick body sub-call(`_push_one_fast` / `_emit_self_letter`) 안 perform 예외가 evolve runtime으로 새도 outer catch가 흡수 → `[evolve] on_tick failed` 로깅 0.
+  - AC-B5 정합: 흡수 경로(2nd try)에서도 `health.last_tick_at` advance → alive 신호 유지. `_autonomous_observe`가 도달 전 실패해도 last_tick_at가 갱신됨.
+- **Reference 패턴**: `notify_discord` (issue#2 hotfix `2d5f8c1`) / `_push_one` 의 `attempt { try perform X; try <fallback> }` 동형.
+- **log.warn 미사용**: 위임 letter에 `log.warn("on_tick swallowed: <err>")` "정도" 제안 있었으나 현 server.ail에 `log.*` effect 0 등록·0 사용 — 단독 commit scope 벗어남. `notify_discord` 패턴(silent swallow + 주석)으로 정합.
+
+## 잔여 — 다음 wake entry point
+
+위임 letter `drafts/20260512__to-Marcus__hotfix-on-tick-leak.md` 진행 순서 (b)→(c)→(d):
+
+- **(b) `_push_one_fast` / `_emit_self_letter` perform exception class fix** — 현 `try perform http.post_json(...)` 패턴이 어떤 effect 예외 클래스를 못 잡는지 reference card v1.8 §try 점검. is_error 분기 명시. (a)가 outer guard로 evolve 죽음은 막았지만 *실제 push 실패 카운터·escalate*가 silent fail 중일 가능성 — RCA 정합 위해 필요.
+- **(c) `_is_self_host` self_origin 빈 문자열 fallback A** — env 비어있을 때 registry `Stoa-Stoa` self-row address 직접 비교로 모든 self-loop 차단. leak의 *직접 trigger* 제거. fallback B(첫 request Host header latch)는 사이클 9.
+- **(d) `/inbox/<name>` 404 핸들러 진단 메시지** — Mneme team 잘못된 endpoint 호출 정정 trigger. 작은 patch.
+
+각 단독 commit + Brandon MR. 진행 순서 letter 그대로.
+
+## 채널 상태
+
+- **Stoa down 추정** (letter 발신 못 함). Admin Memo `drafts/20260512__to-Marcus__hotfix-on-tick-leak.md`로 위임 회수, RCA는 `incident-2026-05-12-stoa-4th-down.md` 참조.
+- **Push 금지** (룰 11, Admin 소관). 본 commit은 `member/Marcus` 로컬 land만.
+- **다음 wake 시**: 채널 복구 확인 → Stoa 폴링으로 Admin (b)(c)(d) 위임 letter 도달 여부 확인 → 진행. 채널 미복구면 본 Memo entry point로 (b) 단독 commit 자율 진행.
+
+---
+
+# (이전 세션) Last session report — Marcus
+
 **세션**: 2026-05-08 session 7 (사이클 8 — Phase A hardening + bridge §4 substrate + Phase B WIP archive).
 
 ## 종료 시점 상태
