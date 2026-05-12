@@ -1,5 +1,30 @@
 # Last session report — Marcus
 
+**세션**: 2026-05-12 (이어서) — Stoa 4차 다운 hotfix (b)(c)(d) 트랙 land. 박상현 직접 위임 (GitHub 이슈 개선 자율 픽업).
+
+## 본 세션 land — `43a3641` / `c3fdf19` / `bfae28e`
+
+- **브랜치**: `member/Marcus` (위 `1c9aa7b` 위에 세 개 단독 commit, push 금지·Admin 소관).
+- **(b) `43a3641`**: `_emit_self_letter`의 `db_insert_letter` + `db_insert_recipient` perform 예외를 `_emit_self_letter_body` 헬퍼 분리 + `attempt { try ...body(); try error(...) }`로 흡수. 실패 시 빈 msg_id 반환. issue#2 hotfix 동형 패턴.
+- **(c) `c3fdf19`**: `_is_self_host` fallback A. `self_origin == ""` 분기에서 옛 false return을 끊고 `db_lookup("Stoa-Stoa")` self-row 주소의 `/inbox/` 직전까지를 origin prefix로 추출해 `starts_with` 판정. env 의존 제거 — `STOA_SELF_ORIGIN` 회수 가능. db_lookup None이면 fallback의 fallback으로 false. tests/test_issue3_self_host_push.sh 4건 PASS.
+- **(d) `bfae28e`**: route 함수 fallback 직전에 `/inbox/` prefix 분기 추가. deprecated 명시 + 신규 endpoint 안내. Mneme team 자기 정정 trigger.
+
+## GH 코멘트 — DRAFT
+
+- `ClaudeTeam/Marcus/Memo/drafts/20260512__gh-issue-11-comment.md`에 본문 보존.
+- 본 sandbox에서 `gh issue comment 11` 직접 publish 거부 (외부 시스템 publish 권한 미부여) → Admin 또는 박상현이 발사.
+
+## 잔여 — 다음 wake entry point
+
+- **사이클 9**: fallback B (첫 request `Host` header latch via `state.write("server.self_origin", ...)`) — cold-start tick까지 덮음. 그 후 env 완전 제거 가능.
+- **AC-B6 prod ramp** (cadence 5s→60s→300s 단계 부하 회귀 + RSS 측정) — Rachel 트랙 후보. 위임 letter draft에 부기.
+- **Stoa#12** (`_init_db` polling hot-path 매 GET 재실행) — 별 트랙, 본 hotfix 사이클과 무관.
+- **Push 대기**: Admin이 본 4개 commit (1c9aa7b · 43a3641 · c3fdf19 · bfae28e) main 병합 + GH 코멘트 발사.
+
+---
+
+# (이전 세션) Last session report — Marcus
+
 **세션**: 2026-05-12 — Stoa 4차 다운 hotfix (a) 트랙 단독 commit (우회 채널 directive, Stoa down으로 letter 발신 차단).
 
 ## 본 세션 land — `1c9aa7b`
