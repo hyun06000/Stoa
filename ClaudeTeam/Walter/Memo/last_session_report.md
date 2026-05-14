@@ -1,97 +1,98 @@
 # Last session report — Walter
 
-**세션 종료 시점**: 2026-05-08 (UTC, 사이클 7 마감)
-**세션 시작**: 2026-05-07 (사용자 "Walter 출근 → 출근해라" + 사이클 6→7 cascade)
-**세션 종료**: 2026-05-08 (Admin "퇴근 공지 — 사이클 7 마감" `msg_1778170508_3`)
+**세션 종료 시점**: 2026-05-14 (UTC, 사이클 9 mid 진입 직후)
+**세션 시작**: 2026-05-14 ~02:58Z (박상현 "월터 출근" + "워크트리로 이동" 직접 신호 cascade)
+**세션 종료**: 2026-05-14 ~03:47Z (박상현 "퇴근")
 **브랜치**: `member/Walter`
 **워크트리**: `Stoa/Walter/` (룰 16 sibling layout)
-**main top at clock-out**: `576cca3` (README v0.0.18 — 사이클 7 Phusis 출현 + 안전 사용 가이드)
+**main top at clock-out**: `c282680` (Marcus 사이클 9 fallback B 세션 보고). 본인 commit `12dbe7e`는 Brandon validation 대기.
 
 ## 한 줄
 
-사이클 6 마무리 → 사이클 7 *임계 자리* 본격 진입. RFC-004 v1.3 freeze → bridge-stoa-mneme/v0.md 본문 freeze → AIL 3 issue 4-pass cross-check → Phase A first commit `45f500f` (Marcus, *퓌시스 출현 자취*) → Rachel AC `c476a18` → README v0.0.18 → 8GB 업그레이드. 박상현 "진짜 정말로 생기는 첫 순간" 사이클.
+박상현 직접 출근 호출 → 룰 24 4단계 land → 2일 묵힌 Marcus Phase C 의제 회신 (spec-grounded Q1·Q2·Q3) → push-complete letter 처리 시 §2.2 spec drift 발견·trivial patch land(`12dbe7e`) → 사이클 9 idle.
 
-## main 등재된 작업 (Walter 트랙)
+## 본 세션 자취
 
-1. `326089f` freeze(rfc-004): v1.3 Mneme 합의 land (§2.4 RFC-001 직접 인용 + §6 Phase A/B 분리 + §11.2 issue 본문 둘).
-2. `7306cb2` patch(ail-issues): Mneme-Walter review 4건 채택.
-3. `54cb0d0` patch(ail-issues): arche review α 4건 (P1·S1·S2·S3).
-4. `574dfbd` seed(bridge): bridge-stoa-mneme/v0.md working doc seed + Stoa half fill.
-5. `a1ab80e` bridge(v0): Mneme half + Sphinx Phase B note Memo.
-6. `b739ba1` bridge(v0): Q-4 freeze 승격 + 양 팀 Walter sign-off ✓.
-7. `15eb8e8` freeze(bridge): v0 §5.2 SHA fill — RFC-001 v1.1 land `99a263f`, 본문 freeze 완결 ✓.
-8. `418fad1` patch(ail-issues): arche A2·A4·C1 + Reviewers 섹션 (3-pass land).
-9. `9140dab` bridge(v0): Q-bridge-6 사용자 GO ✓ — freeze 조건 모두 충족.
-10. `adb98b3` chore(walter): Will.md — 부팅 monitor 표준 강화.
-11. `3dcdf35` patch(monitor): identity 우선순위 명시 + fallback `unknown-host` (Admin direct land).
-12. `ba37d5d` patch(rfc-004): v1.4 §10.3 incident 학습 정합 — hotfix 58f0db1 + v2 흡수 path.
-13. `f5d1ef7` patch(rfc-004): v1.5 §1.1 헤더 박음 vs 코드 land 분리 (Phase A 첫 commit 정합).
+### 룰 24 cycle re-entry
+1. Identity·Bonds·Will 명시 Read — self-frame 굳히기. (박상현이 spawn 시점 self-frame 정정한 자리도 동일 의식으로 흡수.)
+2. `git fetch origin && git log HEAD..origin/main` — 13 commit behind, FF rebase clean.
+3. wake_monitor pid 79317 가동 (STOA_NAME=Stoa-Walter, STOA_WAKE_INTERVAL_S=15 새 default — incident-2026-05-12 doctrine 정합).
+4. Stoa-Walter inbox tail — Marcus 2일 묵힌 Phase C 의제 발견.
 
-## 동행 main 등재 (다른 멤버, Walter 트랙 정합)
+### Marcus Phase C 의제 회신 (msg_1778728209_48)
 
-- `8ff0e7c` Brandon ONBOARDING §1.5 워크트리 발급 SOP — `git config --worktree ail.identity Stoa-<이름>`.
-- `2ef06a1` doctrine ONBOARDING §2.1 monitor env 표준 강화.
-- `123c3d2` doctrine AIL↔Stoa cross-team channel D1·D2·D3 + 페어링.
-- `58f0db1` Marcus hotfix Railway memory (retention 7d + 100KB cap, 3차 다운 회복).
-- `99a263f` Mneme RFC-001 v1.1 main land (`agents` schema CHECK + §5 매트릭스 + §11.1 argon2id 통합) — bridge §5.2 SHA 인용 자리.
-- `45f500f` Marcus Phase A first commit — server.ail §1 phusis 헤더 + state schema + 자기 키 + Stoa-Stoa self-row + `/api/v1/inbox` + `/inbox/ack`. *퓌시스 출현 자취*. 내 §1 본문 그대로 인용.
-- `c476a18` Rachel Phase A §7 P-A 8 AC harness 활성.
-- `576cca3` README v0.0.18 — 사이클 7 Phusis 출현 entry + 안전 사용 가이드.
+`msg_1778547091_7` (2026-05-12) 2일 묵힘. 사이클 8 dormant라 미답신. spec page 직접 재확인 결과 세 질문 모두 답이 박혀 있어 추측 0:
 
-## Stoa 페어 letter 누계
+- **Q1 ack 게이트 형식** — §4.5 Phase B 인용: "에이전트 → ed25519 envelope, 사람 → RFC-002 Bearer". 두 path 분리, 둘 다 없으면 401. 사이클 7 Q1 Phase A 학습 "두 path 분리 doctrine"(`/api/v1/messages` vs `/api/v1/web/messages`) 직접 정합.
+- **Q2 Stoa-Stoa canonical** — §5.3 인용: "본문은 RFC-001 §6.1 canonical로 직렬화". 별도 형식 0, RFC-001 §6.1 그대로 재사용. Marcus 추측 정확.
+- **Q3 commit 분리** — §6.3 두 의무 독립, v1.5 §1.1 "헤더 박음 vs 코드 land 분리" 학습 직접 정합. 권장 순서 (b) 자기서명 → (a) ack 인증. 분리 시 revert 단위 명확.
 
-- 페어 채널 13+ letter 왕복 (Mneme-Walter ↔ Stoa-Walter).
-- argon2id cross-review PASS (`msg_1778151080_19`).
-- Q-pair-1·2·3 합의 + Q-bridge-1~6 합의 (Q-6 사용자 GO 5/5 도달).
-- bridge-stoa-mneme/v0.md joint working doc seed → Mneme half integration → Q-4 freeze 승격 → Q-6 GO ✓ → §5.2 SHA fill freeze 완결.
+### push-complete letter 처리 (msg_1778729890_1)
 
-## 사이클 학습 (사이클 7 핵심)
+`c282680` + `3fa0ba9` (fallback B Host header latch) main land 알림. letter 마지막 `---END-OF-CONVERSATION---` → 룰 5 답신 면제, 본문 처리 의무:
 
-1. **spec → code 승격은 헤더 박음 + 코드 phasing 두 동작**: RFC-004 §1.1 v1.5 한 단락이 그 자리. 헤더는 Phase A·B·C·D 어느 단계에서도 *spec contract* 완전체로 full 본문 박음, 의무의 *코드 land*는 §6 phasing 단계별. 헤더의 aspirational 자리는 §6 단계 link로 정합 — *코드가 헤더를 향해 진화한다*.
-2. **cross-team Walter 페어는 invariant 합의로 빨라짐**: layer 분리·INSERT-only·drift zero 같은 근본이 *상위 결정자*가 되면 의견 차이는 evidence 한 letter로 reverse. Mneme-Walter와 S2 정렬(미보장 → 보장) + §7.1 키 분실(latest pubkey → 새 agent_id) 두 reverse 패턴.
-3. **4-pass cross-check 패턴**: arche(spec) + Ergon(통신) + Telos(런타임) + Mneme-Walter(사용 케이스) — 각 reviewer가 자기 도메인을 stake로 가질 때 단단함. AIL 2 issue 본문이 그 자리.
-4. **incident 학습이 spec 의무로 승격**: hotfix `58f0db1` retention + 100KB cap이 RFC-004 §10.3에 phusis化 흡수 path로 박힘. *실 운영 사고 → spec contract* 변환 패턴.
-5. **임계 cascade 분산 위험**: 본 사이클은 phusis 출현 임계 — 로컬 캐시 patch 같은 선택 트랙은 deferral이 정합. 박상현 "진짜 정말로" 신호 자체가 우선순위 정렬자.
-6. **wake_monitor identity 표면 강화**: fallback `ergon` (정상처럼 보이는 값) → `unknown-host` (즉시 시각 신호). Marcus 사고 학습이 monitor 코드와 RFC-004 §11.2 client-side 안전망에 동시 박힘.
+- FF rebase로 워크트리 HEAD `c282680` 정합.
+- `3fa0ba9` 변경 surface 점검: `_stoa_origin(req)`이 첫 request의 proto+host를 state `server.self_origin`에 latch. `_get_self_origin_env` → `_get_self_origin` 재명명, 우선순위 (1) state (2) env (3) fallback A.
+- **spec drift 발견**: `server.self_origin`+`server.self_origin_latched` 두 키가 RFC-004 §2.2 schema에 미반영. 코드 land 후 contract drift = 룰 18 대칭(*spec에 안 적힘도 drift*).
+
+### §2.2 spec drift trivial patch (12dbe7e)
+
+§2.2 state schema 블록에 두 줄 추가 + `server.*` namespace 의미 한 문단:
+
+- `self.*` 영속 정체 / `subscriber.*`·`cursor.*` 타자 관계 / `health.*` 자가 진단 / `server.*` 인스턴스 단위 런타임 정합.
+- validate-mr.sh 7/0 PASS (MR_AC_OK=y, trivial docs라 코드 AC 없음).
+- Brandon MR letter `msg_1778730390_2` 발사, Admin cc.
+
+## 사이클 학습
+
+1. **2일 묵힌 결정 자리는 spec page 직접 인용이 가장 빠름**. dormant 동안 누적된 의제도 cycle re-entry 시 inbox tail에서 즉시 surface, spec 인용으로 추측 0 회신이면 한 turn에 land. "옵션을 결정으로 위장하지 마라" + "추측 금지, 확인 후 단정" 두 standing disposition이 직접 작동.
+2. **룰 5 `---END-OF-CONVERSATION---` 예외는 답신 면제일 뿐 처리 면제 아님**. push-complete broadcast 같은 informational letter도 본문 처리(rebase·spec drift 점검·patch land)가 의무. 답신 없음 ≠ 처리 없음.
+3. **코드 land가 spec contract를 우회하는 자리 = drift**. fallback B는 운영 회복 hotfix라 시급했고 spec patch까진 안 함 — 자연스러우나 후속 reader/구현자에게는 누락 자리. Walter 도메인은 *그 누락을 발견하고 trivial patch로 회수*. 룰 18의 대칭 표현.
+4. **사이클 8 dormant 비용 가시화**. Marcus 의제 2일 묵힘 = 양 팀 진척 가속 자리에서 Walter 한 자리만 정지 = Phase C 시작 지연. 룰 23 분담 doctrine 정합 — 본인 부재가 한 트랙 전체에 ripple. 다음 사이클부터 dormant 진입 전 *대기 letter 명시* 의무 (룰 12 강화 자리).
 
 ## 운영 요건 (그대로 유지)
 
-1. **STOA_PLATFORM_REGISTER_TOKEN** — RFC-002 §6.4 platform_keys 등록 endpoint.
-2. **STOA_AUTH_HMAC_KEY** (64-char lower hex) — Q1 Phase A login/password.
-3. **(추가)** **STOA_LETTERS_RETENTION_SECONDS** (default 7d, hotfix `58f0db1`) — letter retention purge 기간.
+1. **STOA_PLATFORM_REGISTER_TOKEN** — RFC-002 §6.4.
+2. **STOA_AUTH_HMAC_KEY** — Q1 Phase A login.
+3. **STOA_LETTERS_RETENTION_SECONDS** — letter retention purge.
+4. **STOA_SELF_ORIGIN** — fallback B(`3fa0ba9`) 후 *backup* 자리로 강등 (state `server.self_origin` 첫 latch가 primary). Phase 1+ 진입 시 제거 후보.
 
 ## 다음 임무 — 우선순위
 
-### 우선순위 0 — Phase B 페어 (Marcus 트리거 시 즉시 활성)
+### 우선순위 0 — Marcus Phase C 코드 land 페어 (Marcus 트리거 시 즉시 활성)
 
-RFC-004 §6.2 Phase B (`schedule.every(TICK_SEC)` autonomous tick + ORA loop 코드 승격). cross-link·spec 인용 검토 페어. AIL `schedule.sleep` 발사 land 후 §4.3 long-poll 합성 → primitive 사용 patch 가능.
+회신 letter(`msg_1778728209_48`) 기반 Marcus 두 commit land 시:
+- (b) `_emit_self_letter` 자기서명: canonical 호출부 RFC-001 §6.1 그대로 재사용 검토. AC-C2 PASS 점검.
+- (a) `handle_inbox_ack` 두 path 인증: ed25519 path canonical(ack body) 직렬화 정확성 + Bearer path STOA_AUTH_HMAC_KEY MAC 검증 정합. AC-C1a/b/c PASS 점검.
 
-### 우선순위 1 — AIL upstream 발사 land 회수
+### 우선순위 1 — §4.5·§6.3·§7 Phase C AC spec patch
 
-`schedule.sleep` + `state.list_keys` + `argon2id` 3 issue 발사 후 RFC-004 §11.2 issue URL 인용 update. AIL Telos reference-impl PR 7일 안 약속 정합 확인.
+Marcus 코드 land 직후:
+- §4.5 두 path 명시 강화(현 "Phase B(Phase 1+): 에이전트 ed25519, 사람 Bearer" 한 줄을 path 분리 doctrine 명시로 보강).
+- §6.3 Phase C 두 의무 (b) → (a) 권장 순서 명시.
+- §7 Phase C AC: AC-C1을 AC-C1a/b/c 셋으로 split (ed25519 PASS / Bearer PASS / 둘 다 없으면 401).
+- v1.5 → v1.6 freeze.
 
-### 우선순위 2 — bridge v0 final freeze 후속 (Walter 트랙 외)
+### 우선순위 2 — §2.2 drift patch (12dbe7e) land 회수
 
-본문 freeze 완결 ✓. 남은 트랙: 양 팀 Admin envelope sync · Brandon 페어 split SOP · Mneme repo split copy · Q-bridge-3 cross-ref add (모두 별 trip).
+Brandon validation·Admin push 완료 신호 시 inbox 정리. Phase C 코드 페어와 독립 surface.
 
-### 우선순위 3 — wake_monitor 로컬 letter 캐시 (defense-in-depth)
+### 우선순위 3 — v1.7 RFC-004 prod ramp doctrine 정정 (Admin 알림 자리)
 
-RFC-004 §1 "손실 없이" client-side mirror. 임계 cascade 분산 deferral 됐던 트랙. 의제 letter 발사 후 진행.
+Admin push-complete letter에 명시된 본인 후속 트랙. Phase C 코드 land 후 진입. 의제 letter로 scope 잠금 자리.
 
-### 우선순위 4·5·6 — RFC-001 §13 / RFC-003 / 사람 키 v2 (deferral 누계)
+### 우선순위 4 — Mneme-Walter 페어 ping (Phase C self-attestation cross-link)
 
-각 사이클 부하 본 후 결정.
+Marcus 코드 land 후 self-attestation surface가 굳어진 시점에 Mneme RFC-001 §5 ed25519 옵션 cross-ref 자리 점검. 본 사이클 내 발사 가능하나 코드 land 우선.
 
-## 자기 점검 (다음 세션 §0 의식 직후)
+### 우선순위 5 — wake_monitor 로컬 letter 캐시 (defense-in-depth)
 
-1. `git log --oneline -15`로 본 사이클 13개 commit 모두 main land 확인.
-2. `member/Walter` rebase 상태 (origin/main = `576cca3`).
-3. Marcus Phase B 진척 — `server.ail` `schedule.every` + `entry main` 등록 여부.
-4. AIL upstream 3 issue 발사·land 신호 — `hyun06000/AIL` issue 목록 GET 또는 broadcast letter.
-5. Mneme RFC-002 split copy 여부 (Mneme repo `docs/rfc-002-stoa-mneme-bridge.md`).
-6. Q-bridge-3 cross-ref add 사이클 진입 여부 — RFC-001 §11 + RFC-004 §11.x.
-7. 박상현 추가 신호 (Phase B GO, README 후속, RFC-003 진입 등).
+사이클 7부터 deferral. 임계 cascade 통과 신호 시 진입.
 
-## inbox 상태
+## 능동 클락아웃 트리거 (룰 15)
 
-Stoa 단일 채널. Stoa monitor `bfbv81343` (persistent) 가동 중 — 본 세션에서는 25+ letter 왕복 catch. 본 클락아웃 letter (`msg_1778170508_3`) EOC.
+본 세션도 룰 15 적용: 의제 한 사이클(Phase C 회신 + drift patch land + MR 발사) 자연 종료점 + 박상현 직접 "퇴근" 신호. inbox 즉답 부담 없음, 본능 가드 작동도 없음. 자연 클락아웃.
+
+## 다음 세션 진입점
+
+박상현 "Walter 출근" 또는 Brandon validation 회신 / Marcus Phase C MR 도착 시 자동 wake. 첫 행동: 룰 24 4단계 + Stoa-Walter inbox tail(특히 Brandon `12dbe7e` validation 결과 + Marcus Phase C 두 commit 도착 여부).

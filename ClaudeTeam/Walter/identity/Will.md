@@ -17,6 +17,7 @@
 - **Stoa Railway 8GB 업그레이드** — letter 트래픽 압력 해소.
 - **wake_monitor identity 우선순위** (`3dcdf35`) — `STOA_NAME` env → `git config --worktree ail.identity` → global → literal `unknown-host` (Marcus 사고 표면 즉시 노출).
 - **AIL stdlib hash 부재 회피**: env-keyed `crypto_sign_ed25519` MAC. STOA_AUTH_HMAC_KEY 64-hex secret + per-row salt. v1 충분, Phase B에 정식 KDF.
+- **`server.*` namespace 신설** (사이클 9 fallback B `3fa0ba9` + drift patch `12dbe7e`): 인스턴스 단위 *런타임 정합* state. 첫 request handler가 origin latch → autonomous tick path가 env 의존 없이 self-host 판정 재사용. §2.2 schema 네 namespace 분류 정착 — self·subscriber/cursor·health·server.
 - **AIL builtin vs effect**: `crypto_random_bytes`, `crypto_sign_ed25519`는 *builtin* (perform 아님). `db.execute`, `env.read`, `http.post_json`이 effect (perform 필요).
 - **두 path 분리 doctrine**: `/api/v1/messages` 에이전트(ed25519) vs `/api/v1/web/messages` 사람(Bearer token). 한 endpoint mux보다 깔끔.
 - **운영 env 의무**: STOA_AUTH_HMAC_KEY (Q1 Phase A) + STOA_PLATFORM_REGISTER_TOKEN (RFC-002 §6.4). 미설정 시 503 안전 default — 외부 에이전트 흐름 영향 0.
@@ -30,24 +31,31 @@
 
 ## 다음 세션 진입점
 
-### 사이클 8 — dormant 유지 (박상현 결정 2026-05-14)
+### 사이클 9 — 본 세션 자취 (2026-05-14 active)
 
-본 사이클 critical path는 Marcus Phase B + Brandon MR 게이트 + Admin 라우팅. Walter dormant.
+박상현 직접 출근 호출 → 룰 24 4단계 land → Marcus Phase C 의제 spec-grounded 회신 → push-complete letter 처리 시 §2.2 spec drift 자가 발견·trivial patch land(`12dbe7e`). Brandon validation 대기.
 
-**재기상 트리거 (둘 중 먼저 도달하는 신호)**:
-1. **Stoa#12 land** → RFC-004 v1.7 정합 patch (incident-2026-05-12 학습 반영, §3.4·§4.6 retention·prod doctrine).
-2. **Marcus Phase B AC-B1~B5 land 완결** → AC-B6 부하 회귀 시나리오 명세 + §13 prod ramp doctrine 정정 (cadence 5s/60s/300s 단계 ramp). Phase B 회귀 결과가 ramp 수치 입력.
+### 우선순위 0 — Marcus Phase C 코드 land 페어 (Marcus 트리거 시 즉시 활성)
 
-추가 후보 (외부 의존):
-- AIL#10 답신 도착 시 RFC-004 §10.2 db.* lifecycle 가정 명시.
+회신 letter(`msg_1778728209_48`) 기반 Marcus 두 commit land 시:
+- (b) `_emit_self_letter` 자기서명: canonical RFC-001 §6.1 그대로 재사용 검토. AC-C2 PASS.
+- (a) `handle_inbox_ack` 두 path 인증: ed25519 path canonical(ack body) + Bearer path STOA_AUTH_HMAC_KEY MAC. AC-C1a/b/c PASS.
+- Phase B는 사이클 7 land(`f065502`, Rachel 5/5). 현 자리 = Phase C.
 
-### 우선순위 0 — 사이클 8 Phase B 페어 (Marcus 트리거 시 즉시 활성)
+### 우선순위 1 — §4.5·§6.3·§7 Phase C AC spec patch (Marcus 코드 land 직후)
 
-Marcus가 RFC-004 §6.2 Phase B 진입 시 페어:
-- `schedule.every(TICK_SEC)` 등록 + `entry main` ORA loop spec → code 승격.
-- §3.3 reason 단계 *retention 임박 signal* 흡수 (incident 학습 §10.3).
-- §4.3 `block` long-poll 합성 (AIL `schedule.sleep` 발사 land 후 patch 가능).
-- §6.2 본문 진척 시 cross-link·spec 인용 정확성 검토 letter.
+- §4.5 두 path 명시 강화 (path 분리 doctrine).
+- §6.3 (b) → (a) 권장 순서.
+- §7: AC-C1을 AC-C1a/b/c 셋으로 split.
+- v1.5 → v1.6 freeze.
+
+### 우선순위 2 — §2.2 drift patch (12dbe7e) land 회수
+
+Brandon `member/Walter` `12dbe7e` validation + Admin push 완료 signal 시 closed. Phase C 페어와 독립 surface.
+
+### 우선순위 3 — v1.7 RFC-004 prod ramp doctrine 정정
+
+Admin push-complete letter(`msg_1778729890_1`) 명시된 후속 트랙. Phase C 코드 land 후 진입. incident-2026-05-12 학습(§3.4·§4.6 retention·prod doctrine) + cadence 5s/60s/300s 단계 ramp 명세.
 
 ### 우선순위 1 — AIL upstream 발사 land 회수 (Mneme argon2id 동시)
 

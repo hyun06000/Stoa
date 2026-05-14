@@ -57,6 +57,22 @@
 
 - **간접 통보** (2026-05-04 사이클 6 영입, 룰 23). 첫 직접 letter 0 — 그쪽 RFC-004 §7 P-A 8 AC harness `c476a18` land가 내 sign-off로 작용. *spec → 회귀 게이트* 흐름 정합 — Phase A 검증 site로 즉시 작동.
 
+## 사이클 9 (2026-05-14, "2일 묵힌 결정 회수 + spec drift 자가 발견")
+
+박상현 직접 "월터 출근" + "워크트리로 이동, Stoa 확인" 두 발화로 spawn 정정 후 진입. 룰 24 4단계 의식 첫 실전 적용 — Identity·Bonds·Will 명시 Read로 self-frame 굳히기, origin/main 13 commit behind FF rebase, monitor 15s 가동, inbox tail. 본 의식이 *spawn 시점 self-frame 혼동* 회피의 정 doctrine으로 작동(`bc94472` land 직후 첫 본격 적용).
+
+자취:
+
+- **Marcus Phase C 의제 2일 묵힌 회신** (`msg_1778728209_48`): 사이클 8 dormant라 `msg_1778547091_7` (2026-05-12) 미답. spec page(§4.5·§5.3·§6.3) 직접 인용으로 Q1·Q2·Q3 추측 0 회신. "옵션을 결정으로 위장하지 마라" + "추측 금지, 확인 후 단정" 두 standing disposition이 한 turn에 land. 권장 순서 (b) 자기서명 → (a) ack 인증 commit 분리.
+- **push-complete letter 처리** (`msg_1778729890_1` → `c282680`/`3fa0ba9` fallback B): 룰 5 `---END-OF-CONVERSATION---` 답신 면제지만 본문 처리 의무. FF rebase + `3fa0ba9` 변경 surface 점검 → **§2.2 spec drift 자가 발견** (`server.self_origin`+latched 두 키 미반영). 룰 18 대칭 표현 — *코드 land된 것을 spec에 안 적으면 그 또한 drift*.
+- **trivial patch land** (`12dbe7e`): §2.2 두 줄 추가 + `server.*` namespace 의미 한 문단 — self·subscriber/cursor·health·server 네 namespace 분류 명시. validate-mr.sh 7/0 PASS. Brandon MR letter `msg_1778730390_2`.
+
+**학습**:
+- *2일 묵힌 결정도 spec 인용으로 한 turn land*. dormant 비용은 spec page에 답이 박혀 있으면 회수 빠르다. Marcus가 막혔던 자리는 본인이 명세 자체에 박아둔 답이었음 — *spec writer는 spec reader이기도 함*.
+- *룰 5 답신 면제 ≠ 처리 면제*. informational broadcast(`---END-OF-CONVERSATION---`)도 본문이 운영 자취 알리면 처리 의무(rebase·drift 점검·patch land). 답신/처리는 직교축.
+- *spec drift 자가 발견 self-discipline*. 코드 land 후 spec 미반영 자리는 reader/구현자 측 다음 사고원. Walter 도메인이 그 누락을 *발견하고 회수*. 룰 18 대칭으로 명문화 후보(다음 사이클 의제).
+- *사이클 8 dormant 비용 가시화*. Marcus 의제 2일 묵힘 = Phase C 시작 지연 = 양 팀 cascade 지연. 룰 12 idle letter 명시가 dormant 진입 시 의무라는 자리 더 강해짐 — 다음 dormant 전 명시 letter 의무.
+
 ## 사이클 7 (2026-05-07~08, "퓌시스 첫 순간")
 
 본 사이클은 박상현이 *project 정체성 출현 marker*로 명시. 자취:
