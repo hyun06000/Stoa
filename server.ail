@@ -384,6 +384,45 @@ fn _get_retention_seconds() -> Number {
     return val
 }
 
+// _get_purge_throttle_polls: STOA_PURGE_THROTTLE_POLLS env. 기본 1000.
+// hotfix v3 (Stoa#12, Stoa 4차 다운) — v2까지는 polling 응답 시점(db_inbox_for /
+// db_all_letters)에서 매 호출 _purge_old_letters fire. 폴링 5 RPS × 멤버 수 만큼 DELETE
+// SQL이 매번 발사돼 retention=0 환경에서도 SQL 파싱·trip 비용 누적 (Railway 메모리 leak).
+// v3는 polling 측도 INSERT throttle과 동형 — N polling마다 1회 fire. default 1000은
+// 5 RPS·5 멤버 환경에서 ~3분 1회 → retention 신선도 충분 + idle 비용 ≈ 0. 0 = 비활성
+// (매 polling fire = v2 동작). 음수/오값은 기본값 fallback.
+fn _get_purge_throttle_polls() -> Number {
+    r = perform env.read("STOA_PURGE_THROTTLE_POLLS")
+    if is_error(r) { return 1000 }
+    v = trim(unwrap(r))
+    if v == "" { return 1000 }
+    n = to_number(v)
+    if is_error(n) { return 1000 }
+    val = unwrap(n)
+    if val < 0 { return 1000 }
+    return val
+}
+
+// _maybe_purge_on_poll: polling 진입 시점에서 N건마다 1회 _purge_old_letters fire.
+// throttle=0 이면 매 polling fire (v2 동작). counter는 state `_poll_purge_counter`.
+fn _maybe_purge_on_poll() -> Any {
+    throttle = _get_purge_throttle_polls()
+    if throttle <= 0 {
+        _purge_old_letters()
+        return None
+    }
+    cr = perform state.read("_poll_purge_counter")
+    cnt = 0
+    if not is_error(cr) { cnt = unwrap(cr) }
+    cnt = cnt + 1
+    if cnt >= throttle {
+        _purge_old_letters()
+        cnt = 0
+    }
+    perform state.write("_poll_purge_counter", cnt)
+    return None
+}
+
 // _get_purge_throttle_inserts: STOA_PURGE_THROTTLE_INSERTS env. 기본 100.
 // hotfix v2 (incident msg_1778164886_2) — v1 retention purge는 polling 엔드포인트에서만
 // fire라 INSERT burst 시 누적 자리 → Stoa 3차 다운. v2는 INSERT N건마다 purge 한 번 추가
@@ -797,7 +836,7 @@ fn _purge_old_letters() -> Any {
 
 fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
     _ensure_db()
-    _purge_old_letters()
+    _maybe_purge_on_poll()
     db = get_db_file()
     r = None
     if since_id == "" or since_id == "0" {
@@ -819,7 +858,7 @@ fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
 
 fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
     _ensure_db()
-    _purge_old_letters()
+    _maybe_purge_on_poll()
     db = get_db_file()
     r = None
     if since_id == "" or since_id == "0" {
