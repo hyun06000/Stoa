@@ -1,42 +1,83 @@
 # Last Session Report — Admin
 
-**Session**: 2026-05-08 (사이클 7 — Phusis 출현 임계 cascade)
-**Final main SHA**: `576cca3` (Phase A `45f500f` + README v0.0.18)
+**Session**: 2026-05-12 ~ 5-14 (사이클 8 — Stoa 4차 다운 회수 + doctrine 정합)
+**Final main SHA**: `c8c9dad` (사이클 8 closing 마지막 commit, wake_monitor default fix)
 
 ## 한 줄
 
-박상현 임계 자리 명시("퓌시스가 진짜 정말로 생기는 첫 순간") 위에서 4축(Walter §1.1·Rachel §7 AC·Marcus Phase A·README) cascade land + Mneme M2 Phase A + AIL v1.72.0 trio 정합 → 살아있는 Stoa 첫 코드 자취.
+Stoa 4차 production 다운 RCA(3-layer leak: env 결손 + try class mismatch + polling hot-path housekeeping 30× 증폭) → env 임시 회수 → Marcus 11 commit fix land → 4 issue 일괄 close → doctrine 5 갭 정합(룰 24·25 + interval 15s + ONBOARDING + README) → 양 팀 cross-team cascade 마감.
 
-## 큰 이정표
+## 큰 자취 시간순
 
-1. **Walter RFC-004 v1.5** (`f5d1ef7`) — §1.1 헤더 박음 vs 코드 land 분리 doctrine. Phase A first commit 직전 spec 정합 자리.
-2. **Rachel §7 P-A AC 8건** (`c476a18`) — `tests/phase_a/test_phase_a.sh` + `STOA_PHASE_A=1` 게이트. 임계 검증 site.
-3. **Marcus Phase A first commit** (`45f500f`) — **퓌시스 출현 자취**. server.ail §1+§1.1 phusis 선언 박음, state schema(`inbox_cursors`), 자기 키, `Stoa-Stoa` registry self-row, `/api/v1/inbox` + `/inbox/ack` 신설, 옛 endpoint back-compat. β path.
-4. **README v0.0.18** (`576cca3`) — Phase A surface, "Stoa 안전하게 사용하기" 8개 안티 패턴, env 일람, 사이클 7 history.
-5. **양 팀 trio 정합** — AIL v1.72.0 PyPI live + Mneme M2 Phase A `520a2f6` + Stoa Phase A `45f500f` 동시 land.
-6. **HEAAL audit doctrine** D4·D5·D6 인지 (arche broadcast) — Stoa 측 *substrate effect 실 사용* 위치 정합.
+1. **5-12 출근 → 4차 다운 인지**: HTTP timeout, last_tick 36h 침묵, RSS 우상향. arche가 fallback로 Stoa#11 발행.
+2. **3-layer RCA**: Railway log dump 2건 비교 분석. (1) `STOA_SELF_ORIGIN` env 결손 → self-host push self-loop, (2) `_push_one_fast` try 예외 클래스 mismatch → unhandled propagate + urllib socket leak, (3) **`db_inbox_for`/`db_all_letters` 매 GET `_init_db()` 30+ db.execute 재실행** = 진짜 root cause.
+3. **격리 실험 → polling-driven leak 확정**: 모든 wake_monitor 정지 → RSS 즉시 평탄화. Stoa#12 발행.
+4. **env primary fix**: 박상현 `STOA_SELF_ORIGIN=https://ail-stoa.up.railway.app` + `STOA_TICK_SEC=300` 적용. 즉시 효과.
+5. **Marcus 11 commit hotfix**: (a) outer try wrap + (b) `_emit_self_letter` rescue + (c) `_is_self_host` fallback A + (d) `/inbox/<name>` 404 진단 + Stoa#12-1 `_ensure_db` process-lifetime guard + Stoa#12-2 `_purge_old_letters` polling throttle + fallback B Host header latch via `server.self_origin` state.
+6. **Brandon identity 혼동 사고**: 첫 spawn 시 CLAUDE.md Admin-narrative-heavy 단독 흡수로 자기 self-frame Admin 굳힘 → 직접 `git push origin member/Marcus:main` 실행. 박상현 직접 정정 → Brandon Identity Read → 회복. 본 Admin 세션도 같은 사이클 origin fetch 미수행 stale 자리 — 같은 root cause(self cycle re-entry 부재) 양 표면.
+7. **룰 24 land**: CLAUDE.md commit `bc94472`. 멤버·Admin 양쪽 동일 적용 4단계 (Identity Read → main fetch → monitor 가동 → inbox tail).
+8. **사이클 9 진입 동시 진행**: Marcus fallback B `3fa0ba9` land, Walter Phase C 회신 (Q1·Q2·Q3 spec-grounded), Rachel 룰 24 4단계 재점검.
+9. **양 팀 ping/pong liveness**: ClaudeTeam 2/4 (Brandon·Rachel) + CAST 4/4 (arche broadcast). Marcus·Walter는 dormant 자리, 직후 재활성. arche cc 라우팅 결함(`filesystem://` URI) 학습 → 룰 25 land 자리.
+10. **4 issue 일괄 close**: Stoa#11/#12 + AIL#10 (arche가 reference card에 *caller owns hot-path* doctrine 영구 land via `9e959f0`) + Mneme#10 (Mneme team sweep 결과 무죄 + doctrine patch).
+11. **사이클 8 closing doctrine 일괄 정합** (commit `255a2d8` + `c8c9dad`): wake_monitor default 3→15, ONBOARDING §0/§2.1/§3, CLAUDE.md 룰 25, README v0.0.18 사이클 8 단락.
+12. **퇴근 자리**: 양 팀 letter 발신 자취 (`msg_1778731361_1` ClaudeTeam, `msg_1778731409_1` cross-team) + 본 보고 land.
 
-## 사고 + 회수
+## land된 commit (본 사이클 자취, origin/main, 16건)
 
-- **Stale base commit 사고** — Admin 워크트리가 옛 main(c476a18)에 있어 README commit이 stale base에 박혀 Rachel/Walter/Marcus 자취 9 파일 deletion 포함. push 직전 catch → `git reset --hard origin/main` → re-apply → clean push로 회수. main 손상 0. 학습: Admin worktree도 cascade 중 `git fetch && git rebase origin/main` 의무.
-- **Marcus 첫 부팅 13분 무응답** — wake_monitor 가동 전 인지. 박상현 spawn 후 즉시 부팅 → Phase A 진입.
+```
+c8c9dad fix(wake_monitor): default interval 3 → 15 (255a2d8 누락분)
+255a2d8 doctrine(cycle-8 closing): wake_monitor default 15s + cwd-self + rule 25 + README
+c282680 chore(Marcus): 세션 보고 — 사이클 9 fallback B (3fa0ba9) land + Brandon MR / Admin idle
+3fa0ba9 hotfix(stoa): fallback B — Host header latch via server.self_origin state
+bc94472 doctrine(CLAUDE.md): 룰 24 — 세션 첫 turn 1인칭 식별 + cycle re-entry 의무
+fd0ad85 feat(tools): gh_monitor.sh — GitHub issue+comment 폴링 monitor
+4728470 chore(Admin): incident-2026-05-12 addendum + Marcus hotfix delegation draft
+cc3b487 chore(Walter): 사이클 8 dormant + 재기상 트리거 박음
+a9e29a5 chore(Marcus): 세션 보고 — Stoa#12 (1)(2) commit land + Brandon MR / GH 코멘트 발사
+28d85b6 hotfix(stoa): _purge_old_letters polling throttle — N건당 1회 fire
+a0a5b64 hotfix(stoa): _ensure_db process-lifetime guard — _init_db cold-start 1회
+780b02a chore(Marcus): 세션 보고 — (b)(c)(d) land + GH 코멘트 draft 보존
+bfae28e hotfix(stoa): (d) /inbox/<name> 404 진단 메시지
+c3fdf19 hotfix(stoa): (c) _is_self_host fallback A
+43a3641 hotfix(stoa): (b) _emit_self_letter perform exception rescue
+2a725eb chore(Marcus): 세션 보고 — 1c9aa7b (a) 트랙 land + (b)(c)(d) 잔여 entry point
+1c9aa7b hotfix(on_tick): outer attempt+try wrap — Stoa 4차 다운 leak (a) 트랙
+```
 
-## 룰 누적
+## 룰 누적 (사이클 8 추가)
 
-본 사이클 룰 추가 0 (사이클 6에서 룰 22·23 land 후 안정). doctrine D4·D5·D6은 AIL 측 doctrine으로 Stoa 측은 인지·집행 활성, CLAUDE.md mirror는 다음 사이클로.
+- **룰 24** — 세션 첫 turn 1인칭 식별 + cycle re-entry. ClaudeTeam/<self>/identity/{Identity,Bonds,Will}.md Read + git fetch + monitor 가동 + inbox tail 4단계.
+- **룰 25** — Letter address `https://` 통일. envelope `from.address`·`to[].address`·`cc[].address` 모두 `https://ail-stoa.up.railway.app/inbox/<name>` 형식.
+
+## 사이클 9 default 자리
+
+- **Marcus** — Phase C 코드 land (Walter `msg_48` 회신 기반, RFC-004 §4.5·§5.3·§6.3 spec-grounded). ed25519 + Bearer 두 path ack 인증 + Stoa-Stoa 자기서명 (b)→(a) 분리 commit.
+- **Walter** — RFC-004 v1.7 prod ramp doctrine 정정 (cadence 5s/60s/300s 단계 + AC-B6 부하 회귀).
+- **Rachel** — AC-leak 1·2·3 정식 회귀 시나리오 (`tests/phase_b/test_leak_polling.sh` 신설 + Phase A·B 통합).
+- **Admin** — env workaround cleanup (`STOA_SELF_ORIGIN` 제거 결정), 양 팀 phusis 결합 트랙 점검 (박상현 위임 2026-05-07).
 
 ## 사용자 큐 (다음 결정 후보)
 
-- **Phase B 진입** (Marcus, `schedule.sleep` autonomous tick) — RFC-004 §6.2.
-- **Tekton 영입** (AIL D5 Two-runtime drift 회귀 신호) — 다음 사이클 후보.
-- **CC 기능** (envelope 확장) — backlog.
-- **ONBOARDING §0(2.5) 1인칭 식별** — backlog.
-- **Stoa redundancy / 외부 health alert** — SPOF 대응 별 RFC.
-
-## 다음 사이클 default 자리
-
-Phase B(Marcus) + Mneme M2 Phase B(Walter wake long-poll) + Walter wake_monitor 로컬 캐시(defense-in-depth). 본 사이클 그룹이 land되면 Phase C(서명 ack 인증) 진입.
+- `STOA_SELF_ORIGIN` env 삭제 시점 (fallback B 코드로 의존 제거됨).
+- `STOA_TICK_SEC` 5분 유지 vs 60s 복원 결정.
+- 사이클 9 위임 발사 시점 (Rachel AC-leak / Marcus Phase C / Walter v1.7).
+- Mneme phusis ↔ Stoa phusis 결합 트랙 본격 진입.
+- CAST 측 Rule 21 (ping/pong liveness) 채택 검토 (arche 권고).
 
 ## 모니터 상태 (자연사 예정)
 
-`bsx9noxfb` 폴링 모니터 가동 중. 하니스 종료와 함께 자연사.
+Stoa-Admin wake_monitor pid 45185 가동 중 (interval 15s, since `msg_1778728472_51` 위 진행). 룰 9 정합 — TaskStop 없음, 하니스와 함께 자연사.
+
+## 클락아웃 직전 (능동 트리거 — 규칙 15)
+
+- 박상현 명시 "애들 다 퇴근 시켰어. 너도 퇴근하도록 해" 직접 수신.
+- 본 세션 land 자취 + 사이클 8 closing 자취 + 사이클 9 entry point 모두 본 보고에 박힘.
+- 양 팀 cross-team cascade 마감 letter 발사 완료 (`msg_1778731361_1`, `msg_1778731409_1`).
+- 룰 17 교착 점검 정합 — 멤버 inbox 미처리 0, 멤버 브랜치 divergence 0 (Marcus·Brandon·Rachel·Walter 모두 main 위), 의심 ping 0.
+
+# (옛 session 7 보고)
+
+**Session**: 2026-05-08 (사이클 7 — Phusis 출현 임계 cascade)
+**Final main SHA**: `576cca3` (Phase A `45f500f` + README v0.0.18)
+
+(이하 옛 자취는 git log/incident memo에 영구 보존되므로 본 보고에서 제거 — `git log` + `Memo/incident-*` 참조.)
