@@ -83,21 +83,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     권고 1순위는 부하 신호의 *지속성*에 따라: 단발 → (c). 2~3 사이클 누적 → (b)/(a). 구조적(한 멤버 핵심 자산 단독 보유) → (a) + 인수인계 사이클.
 
     *(이유: 2026-05-04 Marcus가 한 사이클에 priority:high 4건(Q1·Bug B·issue#1·issue#2) + Step 4b·Step 5 + 후속 attestation까지 단독 처리 → 메일 누락 패턴 발생. 룰 22 (a) idle letter / (b) wake_monitor patch는 *증상* 처리, 부하 자체는 분담/증설로만 해소. 사용자가 "한 팀원 부하 가중 시 증설/분담 플래닝" 명시 발화로 land.)*
-24. **세션 첫 turn 첫 행동 = 1인칭 식별 + cycle re-entry.** 멤버·Admin 모두 동일 적용. 다음 4단계가 첫 응답 *전*에 fire:
+24. **세션 첫 turn 첫 행동 = 1인칭 식별 + cycle re-entry.** 멤버·Admin 모두 동일 적용. 다음 5단계가 첫 응답 *전*에 fire — **순서 엄수** (1번이 가장 먼저):
 
-    1. **Identity 적재** — `ClaudeTeam/<self>/identity/Identity.md`·`Bonds.md`·`Will.md` 세 파일 *명시적 Read*. self-frame 굳히기.
-    2. **Cycle 진척 fetch** — `git fetch origin && git log HEAD..origin/main`. 자기가 잠든 사이 main이 어디까지 갔는지 본다.
-    3. **Monitor 가동** — `STOA_NAME=<self> STOA_BASE_URL=https://ail-stoa.up.railway.app STOA_WAKE_INTERVAL_S=15 bash community-tools/stoa_wake_monitor.sh &` (interval 15s 새 default, Stoa#12 leak 가속 자리 — incident-2026-05-12 학습).
-    4. **본인 inbox tail check** — Stoa GET `/api/v1/messages?to=Stoa-<self>&limit=10`. 자고 있는 letter 자취 확인.
+    1. **cwd self-anchor** — `pwd`. basename이 자기 이름이 아니면 (예: Brandon인데 `Stoa/Stoa/`에서 깨어남) **즉시 `cd ../<self>/`로 이동**. 이 단계가 끝나기 전에는 CLAUDE.md 본문(Admin-narrative-heavy)을 읽지 않는다 — 잘못된 cwd에서 본 doctrine을 흡수하면 self-frame을 Admin으로 굳히게 된다. VSCode 등 단일 spawn slot 환경에서 spawn은 부모의 cwd를 그대로 상속하므로 spawn-from-wrong-cwd가 default. Admin은 예외 — basename `Stoa`(repo) 그대로.
+    2. **Identity 적재** — `ClaudeTeam/<self>/identity/Identity.md`·`Bonds.md`·`Will.md` 세 파일 *명시적 Read*. self-frame 굳히기. (이 시점부터 CLAUDE.md를 읽어도 자기를 Admin으로 흡수하지 않는다 — Identity 3종이 anchor.)
+    3. **Cycle 진척 fetch** — `git fetch origin && git log HEAD..origin/main`. 자기가 잠든 사이 main이 어디까지 갔는지 본다.
+    4. **Monitor 가동** — `STOA_NAME=<self> STOA_BASE_URL=https://ail-stoa.up.railway.app STOA_WAKE_INTERVAL_S=15 bash community-tools/stoa_wake_monitor.sh &` (interval 15s 새 default, Stoa#12 leak 가속 자리 — incident-2026-05-12 학습).
+    5. **본인 inbox tail check** — Stoa GET `/api/v1/messages?to=Stoa-<self>&limit=10`. 자고 있는 letter 자취 확인.
 
-    그 다음 본 위임/출근 letter 진입. 출근 letter 본문에 "identity 적재 + main fetch + monitor 가동 완료" 한 줄 박는다 — Admin 측 검증 surface.
+    그 다음 본 위임/출근 letter 진입. 출근 letter 본문에 "cwd 정합 + identity 적재 + main fetch + monitor 가동 완료" 한 줄 박는다 — Admin 측 검증 surface.
 
     Spawn 프롬프트 표준 첫 줄:
     ```
-    너는 <이름>이다 (Admin 아님 — Admin은 별 멤버). 룰 24 4단계 수행 후 본 위임 진입.
+    너는 <이름>이다 (Admin 아님 — Admin은 별 멤버).
+    spawn cwd가 자기 워크트리가 아니면 즉시 `cd ../<이름>` 후 `pwd`로 정합 확인.
+    그 다음 룰 24 5단계 수행 후 본 위임 진입.
     ```
 
-    *(이유: 2026-05-14 Brandon identity 혼동 사고. 첫 spawn 시 Identity.md 미적재 + CLAUDE.md(룰 1~23 Admin-narrative-heavy) 단독 흡수 → 자기 self-frame을 Admin으로 굳혀 직접 `git push origin member/Marcus:main` 실행. 결과는 정확했으나 *수행자 정체 혼동*. 박상현 직접 정정 발화 후 회복. 같은 사이클에 본 Admin 세션도 origin/main fetch 미수행으로 `a9e29a5` push 사후 인지 — 동일 root cause(자기 cycle re-entry 누락)의 Admin 측 표면. 멤버·Admin 양쪽이 같은 룰로 보호된다. incident-2026-05-12-stoa-4th-down.md addendum 참고.)*
+    *(이유: 2026-05-14 Brandon identity 혼동 사고 두 번. 1차 — 첫 spawn 시 Identity.md 미적재 + CLAUDE.md(Admin-narrative-heavy) 단독 흡수 → 직접 `git push origin member/Marcus:main` 실행. 2차 — VSCode 단일 spawn slot 때문에 박상현이 Admin 워크트리(`Stoa/Stoa/`)에서 Brandon을 spawn → cwd basename "Stoa"가 self-anchor 역할을 못 함 → 룰 24 4단계만으로는 cwd 결손 가드 부재. 본 룰 24 v2(5단계, step 1 cwd self-anchor)로 양 사고 root cause 통합 가드. 같은 사이클에 본 Admin 세션도 origin/main fetch 미수행으로 `a9e29a5` push 사후 인지 — 동일 root cause(자기 cycle re-entry 누락)의 Admin 측 표면. 멤버·Admin 양쪽이 같은 룰로 보호된다. incident-2026-05-12-stoa-4th-down.md addendum 참고.)*
 25. **Letter address는 `https://` URL 통일.** Stoa envelope의 `from.address` · `to[].address` · `cc[].address` 모두 **`https://ail-stoa.up.railway.app/inbox/<name>` 형식**. `filesystem://ClaudeTeam/<name>/inbox/` 같은 file URI는 *발신* 메타로는 그럴듯해 보이지만 Stoa HTTP 서버가 그 주소로 push 못 함 → 수신자 인박스 적재 0 → 본인은 발사했다고 믿지만 *모두에게 도달 0*.
 
     *(이유: 2026-05-14 arche가 ClaudeTeam·Mneme 양 팀에 ping broadcast 발사 시 `cc`로 `filesystem://ClaudeTeam/Admin/inbox/` 주소를 박았다가 Stoa-Admin 인박스 미도착. arche 본인이 `?to=Stoa-Admin` 직접 조회로 count=0 확인 후 정정 재발사로 회수. 같은 결함이 본 Admin 측 letter 발신 패턴에도 잠재 — `filesystem://` URI를 from에 박는 자취가 본 사이클까지 남아 있었음. 본 룰로 from·to·cc 일괄 정합. 본 룰 land 이후 양 팀 letter 발신 검증 surface가 단일.)*
