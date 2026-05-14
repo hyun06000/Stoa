@@ -1,5 +1,37 @@
 # Last session report — Marcus
 
+**세션**: 2026-05-14 — Stoa#12 픽업, polling hot-path leak hotfix 2 commit land. 박상현 직접 위임 (Admin 우회, Stoa 다운 가능성).
+
+## 본 세션 land — `a0a5b64` / `28d85b6`
+
+- **브랜치**: `member/Marcus` (위 `780b02a` 위에 두 commit, push 금지·Admin 소관).
+- **(1) `a0a5b64`**: `_ensure_db` process-lifetime guard. `state.read("db.initialized")` flag 기반, cold-start 첫 호출에서만 `_init_db()` fire + flag set. 모든 핸들러 진입점 25 site를 `_init_db()` → `_ensure_db()` 일괄 치환 (정의 + 주석 2줄 + helper 본체 자기호출은 보존). `_init_db` 자체는 시그니처·본체 변경 없음 — 명시적 강제 재초기화 자리(테스트·migration)는 그대로 직접 호출 가능.
+- **(2) `28d85b6`**: `_purge_old_letters` polling throttle. `_get_purge_throttle_polls()` env helper(`STOA_PURGE_THROTTLE_POLLS`, default 1000) + state counter `_poll_purge_counter` 기반 `_maybe_purge_on_poll` 래퍼. `db_inbox_for` / `db_all_letters` 두 polling 핸들러의 purge 호출 치환. throttle=0 은 v2 동작(매 polling fire) 유지 — 안전 fallback.
+
+## AC 자기검증 (정적 추론)
+
+- AC-leak-1 (RSS 평탄성 ±5%): polling 경로 SQL 비용 1000× 감소 + schema SQL은 cold-start 1회. PASS(정적). production 실측은 land 후 RSS 곡선.
+- AC-leak-2 (`_init_db` 호출 = cold-start 1 + polling 0): `_ensure_db` flag hit 시 즉시 return. PASS(정적).
+- AC-leak-3 (`_purge_old_letters` fire = polling 1000건당 1회): throttle=1000 분기 cnt 1→1000 wrap. PASS(정적).
+
+테스트 인프라가 RSS 측정·call counter 안 받아 정적 추론으로 갈음. tests/ 회귀 추가는 본 사이클 스코프 외 (위임 자체가 두 commit 분할 명시).
+
+## 핸드오프
+
+- **Brandon MR letter**: Stoa `msg_1778722262_128` (HEAD `28d85b6`, base `780b02a`, ahead/behind 8/0, FF 가능, AC PASS(정적), push 권고).
+- **GH#12 코멘트**: https://github.com/hyun06000/Stoa/issues/12#issuecomment-4446579929 (이번엔 sandbox가 publish 허용 — 이전 사이클 거부 패턴 회수).
+- **Push 대기**: Admin이 두 commit (a0a5b64 · 28d85b6) main 병합.
+
+## 잔여 — 다음 wake entry point
+
+- **사이클 9 (이전 entry)**: fallback B (첫 request `Host` header latch via `state.write("server.self_origin", ...)`) — cold-start tick까지 덮음. 본 사이클은 Stoa#12 픽업으로 우회, fallback B는 다음 사이클 진입 자리로 보존.
+- **AC-B6 prod ramp** (cadence 5s→60s→300s 단계 부하 회귀 + RSS 측정) — Rachel 트랙 후보. 본 사이클 land로 회귀 baseline 갱신 필요.
+- **Stoa#12 후속 모니터링**: production land 후 첫 24시간 RSS 곡선 + cold-start tick 카운트로 leak 회수 검증.
+
+---
+
+# (이전 세션) Last session report — Marcus
+
 **세션**: 2026-05-12 (이어서) — Stoa 4차 다운 hotfix (b)(c)(d) 트랙 land. 박상현 직접 위임 (GitHub 이슈 개선 자율 픽업).
 
 ## 본 세션 land — `43a3641` / `c3fdf19` / `bfae28e`
