@@ -1633,6 +1633,23 @@ fn _is_self_host(addr: Text, self_origin: Text) -> Boolean {
     return starts_with(addr, self_origin_inferred)
 }
 
+// _is_polling_inbox: addr가 `<anything>/inbox/<name>` 형식이면 true. 룰 25 doctrine
+// 정합 — Stoa registry address `<origin>/inbox/<name>`는 *polling-only inbox URL*
+// (수신자가 GET으로 poll), HTTP push target 아님. 따라서 `_pump_subscriber`가 그
+// 주소로 POST 시도하면 self-loop 404 → urllib socket alloc 누적 RSS leak.
+//
+// Stoa#13 트랙 A — self_origin latch 결손(autonomous tick context에서 state read
+// 가 request handler scope의 latched 값을 못 보는 정황)에 안전한 가드: addr
+// suffix만으로 판정. `_is_self_host` 보다 강한 doctrine-level invariant.
+fn _is_polling_inbox(name: Text, addr: Text) -> Boolean {
+    suffix = join(["/inbox/", name], "")
+    a_n = length(addr)
+    s_n = length(suffix)
+    if a_n < s_n { return false }
+    tail = slice(addr, a_n - s_n, a_n)
+    return tail == suffix
+}
+
 // push_to_recipients: issue#3 hotfix — self-host skip + skipped 카운터.
 // 호출자가 self_origin(_stoa_origin(req)) 전달. self_origin과 prefix-매칭되는
 // recipient는 push 시도 0, skipped++. 외부 receivers는 issue#2 fix(_push_one
@@ -2910,6 +2927,21 @@ fn _pump_subscriber(sub: Any, self_origin: Text) -> Any {
     // 초과 → escalate 자체 차단되는 deadlock. Admin pump 차단으로 본 cycle 끊음.
     if name == "Stoa-Stoa" { return None }
     if name == "Stoa-Admin" { return None }
+    // Stoa#13 트랙 A — addr가 `<...>/inbox/<name>` 형식이면 polling-only inbox URL
+    // (룰 25 doctrine). push 0, 모든 pending letter `status="skipped"` 일괄 마크
+    // 후 즉시 return. self_origin latch 결손에도 안전 — autonomous tick context
+    // 에서 state read 결손으로 `_is_self_host` 가 false 반환되는 정황을 우회.
+    // AIL 5인(homeros·arche·ergon·telos·tekton) 주소는 모두 본 패턴 → self-loop
+    // 404 + urllib alloc leak 차단.
+    if _is_polling_inbox(name, addr) {
+        msgs0 = _delivery_pending(name, 50)
+        ts0 = now_iso()
+        for env_obj0 in msgs0 {
+            mid0 = to_text(get(env_obj0, "id"))
+            _delivery_upsert(name, mid0, "skipped", 0, ts0)
+        }
+        return None
+    }
     msgs = _delivery_pending(name, 50)
     retry_max = _get_deliver_retry_max()
     ts = now_iso()
