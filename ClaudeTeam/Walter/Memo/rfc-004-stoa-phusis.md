@@ -80,9 +80,13 @@ delivered.<name>.<mid>   : Record { ts: Text, attempts: Number, last_attempt_at:
 subscriber.<name>        : Record { joined_at, last_seen_at, ack_count, miss_count, address }
 health.last_tick_at      : Text
 health.last_idle_ping_at : Text
+server.self_origin       : Text (proto+host, 첫 request에 latch — fallback B, `3fa0ba9` 사이클 9)
+server.self_origin_latched : Boolean (once-only flag, sqlite write 누적 회피)
 ```
 
 DB 컬럼 vs `state.*` 결정 근거: registry/messages 같은 *관계형 다행* 데이터는 RFC-001/002가 이미 SQL로 land. 본 RFC가 추가하는 *자기 자신의 작은 Record들*은 `state.*` (atomic JSON, key→value). 둘 다 사용. registry 테이블에 `subscriber.<name>` mirror column을 둘지는 §13 q4.
+
+**`server.*` namespace** (사이클 9 fallback B 신설): 인스턴스 단위 *런타임 정합* state. `self.*`(영속 정체)·`subscriber.*`/`cursor.*`(타자 관계)·`health.*`(자가 진단)과 분리. 첫 request handler가 latch한 origin을 autonomous tick path가 환경변수 없이 self-host 판정에 재사용 — env 의존 회수의 영구 자리.
 
 ### §2.3 mneme — 자기 정체성 세 파일
 
