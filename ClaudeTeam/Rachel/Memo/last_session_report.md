@@ -1,5 +1,29 @@
 # Last session — Rachel
 
+## 2026-05-14 — 사이클 8 close 직후 대기 세션, 룰 24 첫 적용
+
+부팅: `Stoa/Rachel/` member/Rachel HEAD `f065502` (사이클 8 close). 박상현 "레이첼 출근" 후 즉시 대기 자세 지시 (Brandon이 Marcus 묶음 MR PASS → Admin push → Railway 재배포 land 후 활성화 자리).
+
+### 세션 시퀀스
+
+1. **출근 + idle letter dual** — wake_monitor (Stoa-Rachel, 15s) 가동. Admin idle letter `msg_1778722116_127` (Stoa) + 파일시스템 `20260514-012730__Rachel__idle-clockin-wait-marcus-mr.md` (룰 21).
+2. **룰 24 land 인지** — 박상현 발화로 룰 24 (`bc94472`) 확인. 4단계 (Identity Read · main fetch · monitor · inbox tail) 사후 수행, 검증 surface letter `msg_1778726175_1` Admin 발사.
+3. **Admin ping 회수** — `msg_1778726623_6` + `msg_1778726648_10` (Stoa 4차 다운 회수 직후 alive 확인). Pong `msg_1778726760_11`: `2026-05-14T02:45:50Z f065502`, 큐 0.
+4. **워크트리 FF 동기화** — 박상현 지시로 `f065502 → bc94472` FF (8 files, +587 −34). Stoa#12 hotfix (a)(b)(c)(d) + 룰 24 + gh_monitor + Marcus incident-2026-05-12 자료 모두 적재. 4단계 재점검 letter `msg_1778727816_41`.
+5. **퇴근 신호** — 박상현 "퇴근".
+
+### 룰 24 학습
+
+이번 세션이 룰 24 첫 적용 사이클. 첫 turn에 4단계를 *건너뛰고* 대기 자세부터 진입한 게 패턴 — Admin 측 정정으로 사후 수행. 다음 부팅부터 첫 turn 첫 행동으로 4단계 fire, 그 다음 본 위임 진입. 본 세션 산출 letter (`msg_1778726175_1`, `msg_1778727816_41`)이 검증 surface 표준 형식.
+
+### 다음 세션 entry point
+
+- **첫 행동**: 룰 24 4단계 (Identity Read · `git fetch origin` · monitor 15s · inbox tail).
+- **대기 위임**: AC-leak 1·2·3 정식 회귀 시나리오 (`tests/phase_b/test_leak_polling.sh` 신설) + Phase A·B 통합 회귀 + `run_all.sh` 게이트. Stoa#12 hotfix `bc94472` main land 완료, 검증 대조군 깨끗.
+- **워크트리 상태**: member/Rachel HEAD `bc94472` (origin/main과 동기, behind=0).
+
+---
+
 ## 2026-05-07 trip 2 — 사이클 7 Phase A 임계 자리 land
 
 부팅: cd `Stoa/Rachel/` (룰 16 형제 path) → rebase → Stoa monitor `STOA_NAME=Stoa-Rachel`(persistent task `baug4hyg1`, 룰 22 backlog auto-drain 정상).
