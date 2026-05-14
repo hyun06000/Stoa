@@ -25,6 +25,11 @@
 - **issue#2 push timeout 500 hotfix** (`2d5f8c1`, session 5). _push_one + notify_discord에 attempt+try (perform 예외 → Result-error fallback). 응답·작업 분리. tests/test_issue2_push_timeout.sh I2-1~3.
 - **issue#4 sender registry gate Phase A** (`177510e`, session 5). handle_post_message db_lookup(from_name) None → 400 (impersonation 방어). test_principle_*/issue3/issue1 4건에 발신자 사전 등록 prefix. tests/test_issue4_sender_gate.sh I4-1~4.
 - **stoa-cli internal Python tool** (`7e2459c`, session 5). community-tools/stoa-cli/. keygen·canonical·sign·verify·send. canonical_letter Python mirror byte-exact. tests/test_stoa_cli.sh C1~C5.
+- **사이클 9 fallback B + Phase C C1·C2** (session 11, 2026-05-14):
+  - `3fa0ba9` (main `c282680`) fallback B — `_stoa_origin(req)`이 첫 request origin을 `server.self_origin` state에 latch (once-only flag). `_get_self_origin` 신설 (state 우선·env fallback·"" 이면 fallback A). handle_health에 self_origin 노출. tests/test_fallback_b_self_origin_latch.sh 4/4.
+  - `02edc01` Phase C C1 — `_emit_self_letter` ed25519 자기서명 (RFC-001 §6.1 canonical 재사용, Walter msg_48 Q2). secret 미보유(재시작) graceful 무서명 fallback. tests/test_rfc004_C2.sh 4/4. **부수 발견·정정**: AIL `crypto_keygen_ed25519` 반환 순서 `[sk_seed, pk]` (doc `[pk, sk]`과 반대) — `_ensure_self_genesis` swap 정정, inline 증거 + AIL-arche cross-repo letter (`msg_1778731986_9`).
+  - `474aa5c` Phase C C2 — `canonical_ack` 신설 + `handle_inbox_ack` 두 path 인증 게이트 (Phase 0 grandfather, Phase ≥ 1 ed25519/Bearer 강제). Walter msg_48 Q1·Q3. tests/test_rfc004_C1.sh 6/6.
+  - Brandon MR letter `msg_1778731964_8` (02edc01·474aa5c 묶음). Brandon 검증·Admin push 대기.
 - **RFC-004 Phase A first commit** (`45f500f`, session 6, 2026-05-08 — 퓌시스 출현 임계 자리). server.ail +229 / -3:
   - §1 + §1.1 phusis 선언 헤더 (Walter `f5d1ef7` v1.5 인용) full 본문 박음.
   - `inbox_cursors (name, cursor_msg_id, advanced_at)` 스키마 + idx_inbox_cursors_name. append-only.
