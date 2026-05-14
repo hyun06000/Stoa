@@ -230,10 +230,25 @@ fn _ensure_self_genesis() -> Any {
     kp_r = crypto_keygen_ed25519()
     if is_error(kp_r) { return None }
     kp = unwrap(kp_r)
-    // AIL stdlib `crypto_keygen_ed25519` 반환은 `[pk_hex, sk_hex]` 리스트
-    // (docs/auth/agent-vs-human.md §2.2).
-    pk = to_text(kp[0])
-    sk = to_text(kp[1])
+    // AIL stdlib `crypto_keygen_ed25519` 반환 *실제* 순서: `[sk_seed, pk]` (사이클
+    // 9 Phase C C1 land 자리에서 발견 — Marcus×arche 사후 정합 letter 트랙).
+    //
+    // docs/auth/agent-vs-human.md §2.2는 `[pk_hex, sk_hex]`로 명시했으나, AIL 본체
+    // 동작은 RFC 8032 ed25519 keypair 표현 (`signing_key.private_bytes_raw()` 32B
+    // seed + `verify_key.public_bytes_raw()` 32B pk) 순서로 [sk, pk] 반환. 본 함수
+    // 안에서 PK를 state.public_key_hex에 저장 후 registry self-row.public_key로
+    // 등재 → 외부가 그 pk로 crypto_verify_ed25519 검증할 때 일치하려면 *AIL이
+    // 실제 sign에 쓰는 seed*를 sk 자리에 보관해야 한다. 따라서 kp[0] = sk(seed),
+    // kp[1] = pk가 정합.
+    //
+    // 증거: Python `cryptography.Ed25519PrivateKey.from_private_bytes(kp[0])
+    // .public_key().public_bytes_raw()` == kp[1] (test_rfc004_C2 디버그 사이클).
+    //
+    // 옛 swap (pk=kp[0], sk=kp[1]) 코드 land 자취 (Phase A `45f500f` 2026-05-08~
+    // 사이클 9 본 commit 직전)는 Stoa-Stoa 자기서명 path 부재라 production 표면
+    // 없음 — Phase C 진입 turn에 발견·정정.
+    sk = to_text(kp[0])
+    pk = to_text(kp[1])
     ts = now_iso()
     perform state.write("self.public_key_hex", pk)
     perform state.write("self.secret_key_hex", sk)
@@ -2598,15 +2613,33 @@ fn route(req: Any) -> [Any] {
 // _emit_self_letter_body: _emit_self_letter의 INSERT 두 건 본문. db.execute가
 // effect 예외 raise할 수 있어 별도 함수로 분리 — try 표현이 단일 expression을
 // 감싸므로 (block form `try { ... }` 미지원, on_tick / _on_tick_body 동일 패턴).
-fn _emit_self_letter_body(msg_id: Text, ts: Text, to_name: Text, to_addr: Text, content: Text) -> Any {
-    db_insert_letter(msg_id, "Stoa-Stoa", "stoa://self", content, ts, None, None)
+//
+// Phase C C1 (사이클 9) — signature/nonce 인자 추가. 두 인자 모두 None일 수
+// 있고(this lifetime이 self.secret 미보유, 옛 self-row 위에서 부팅한 인스턴스),
+// 그 경우 db_insert_letter가 NULL 컬럼으로 INSERT — 옛 Phase B 무서명 emit과
+// 동형. 본 실패 시 폴백 path가 자연 유지.
+fn _emit_self_letter_body(msg_id: Text, ts: Text, to_name: Text, to_addr: Text, content: Text, signature: Any, nonce: Any) -> Any {
+    db_insert_letter(msg_id, "Stoa-Stoa", "stoa://self", content, ts, signature, nonce)
     db_insert_recipient(msg_id, to_name, to_addr)
     return None
 }
 
 // _emit_self_letter: from=Stoa-Stoa 자기 letter 1건 INSERT. msg_id 자동 할당,
-// recipient row 1건. 본 단계 무서명 (Phase C에서 ed25519 자기서명 추가). 응답 0
-// (autonomous emit, response 회수 무관).
+// recipient row 1건. 응답 0 (autonomous emit, response 회수 무관).
+//
+// Phase C C1 (사이클 9) — ed25519 자기서명. RFC-004 §5.3 + Walter msg_48 Q2:
+// 별도 self-letter canonical 형식 없음, RFC-001 §6.1 그대로 재사용.
+//   nonce = crypto_random_bytes(16) → 32-char hex.
+//   canonical = canonical_letter("Stoa-Stoa", "stoa://self", [{to_name,to_addr}],
+//                                content, ts, nonce).
+//   signature = crypto_sign_ed25519(self.secret_key_hex, canonical).
+// 수신측 검증: registry self-row `Stoa-Stoa`.public_key로 crypto_verify_ed25519.
+//
+// **현 Phase 한계**: self.secret_key_hex는 `_ensure_self_genesis`가 *이번 라이프
+// 타임에 keypair 생성*했을 때만 process state에 살아 있음. Railway 재시작 후
+// self-row 이미 존재 분기에서는 secret 없음 → graceful 무서명 fallback (None 두
+// 인자, db NULL). Phase D(vault·외부 KMS) land 후 항상 서명 가능. 본 단계는
+// genesis lifetime에서만 서명 — AC-C2 시나리오는 fresh 인스턴스라 covered.
 //
 // 4차 다운 hotfix (b) (2026-05-12) — `db_insert_letter`/`db_insert_recipient`가
 // `perform db.execute`을 직접 호출하는데 SQLite lock contention·disk full 등에서
@@ -2619,10 +2652,42 @@ fn _emit_self_letter_body(msg_id: Text, ts: Text, to_name: Text, to_addr: Text, 
 // 반환값은 msg_id Text — 실패 시 빈 문자열 ("")로 굳혀 호출자가 자취 인식.
 fn _emit_self_letter(to_name: Text, to_addr: Text, content: Text) -> Text {
     _ensure_db()
+    _ensure_self_genesis()
     msg_id = make_id()
     ts = now_iso()
+
+    // self-sign 시도 — secret 보유 시에만 서명, 미보유 시 None 두 인자로 무서명
+    // emit (Phase B 동작 보존 + Railway 재시작 분기 graceful).
+    sig_arg = None
+    nonce_arg = None
+    sk_r = perform state.read("self.secret_key_hex")
+    if not is_error(sk_r) {
+        sk = to_text(unwrap(sk_r))
+        if sk != "" {
+            nonce_r = crypto_random_bytes(16)
+            if not is_error(nonce_r) {
+                nonce_hex = unwrap(nonce_r)
+                if nonce_hex != "" {
+                    recipients = [make_record([
+                        ["name", to_name],
+                        ["address", to_addr]
+                    ])]
+                    canon = canonical_letter("Stoa-Stoa", "stoa://self", recipients, content, ts, nonce_hex)
+                    sig_r = crypto_sign_ed25519(sk, canon)
+                    if not is_error(sig_r) {
+                        sig_hex = unwrap(sig_r)
+                        if sig_hex != "" {
+                            sig_arg = sig_hex
+                            nonce_arg = nonce_hex
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     r = attempt {
-        try _emit_self_letter_body(msg_id, ts, to_name, to_addr, content)
+        try _emit_self_letter_body(msg_id, ts, to_name, to_addr, content, sig_arg, nonce_arg)
         try error("emit_self_letter failed")
     }
     if is_error(r) { return "" }
