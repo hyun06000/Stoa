@@ -509,13 +509,30 @@ fn _get_deliver_retry_max() -> Number {
     return val
 }
 
-// _get_self_origin_env: STOA_SELF_ORIGIN env. autonomous tick은 request 문맥
-// 없이 self-host detect 수행 — env-driven origin이 _stoa_origin(req) 자리 대체.
-// 빈 문자열 default (detect off, 보수적 — _is_self_host와 같은 의미론).
-fn _get_self_origin_env() -> Text {
-    r = perform env.read("STOA_SELF_ORIGIN")
-    if is_error(r) { return "" }
-    return trim(unwrap(r))
+// _get_self_origin: autonomous tick path가 self-host 판정에 쓰는 origin.
+//
+// 사이클 9 fallback B — 우선순위:
+//   (1) state `server.self_origin` — 첫 들어온 request handler가 `_stoa_origin(req)`
+//       안에서 latch (Host header + X-Forwarded-Proto). cold-start 이후 첫 HTTP
+//       request 한 번이면 state 값이 굳음.
+//   (2) env `STOA_SELF_ORIGIN` — 이전 도리비전(2026-05-12 fallback A 직전) 호환
+//       fallback. Phase 1+ 진입 시 제거 후보.
+//   (3) 빈 문자열 — `_is_self_host` fallback A(registry self-row prefix)로 떨어짐.
+//       cold-start tick(인스턴스 부팅 직후 request 1건도 안 들어온 상태에서
+//       on_tick 먼저 발화)이 이 분기로 들어오나, fallback A가 self-row의 address
+//       prefix로 self-host 판정해 leak 차단 — 가용성 보존.
+fn _get_self_origin() -> Text {
+    s_r = perform state.read("server.self_origin")
+    if not is_error(s_r) {
+        s_v = to_text(unwrap(s_r))
+        if s_v != "" { return s_v }
+    }
+    e_r = perform env.read("STOA_SELF_ORIGIN")
+    if not is_error(e_r) {
+        e_v = trim(to_text(unwrap(e_r)))
+        if e_v != "" { return e_v }
+    }
+    return ""
 }
 
 fn _is_leap_year(y: Number) -> Boolean {
@@ -1556,6 +1573,13 @@ fn _push_one_fast(addr: Text, envelope: Any) -> Any {
 // db_lookup 실패 (registry 누락·DB error)이면 옛 동작(false)으로 떨어져 가용성
 // 보존 — fallback의 fallback. self-row는 on_birth/_init_db 자리에서 항상 INSERT
 // 되므로 정상 path에서는 None 안 됨.
+//
+// 사이클 9 fallback B land — `_stoa_origin(req)`가 첫 request에서
+// `server.self_origin` state에 origin을 latch, autonomous tick path는 state
+// read로 회수. 본 함수의 self_origin 인자는 호출자가 (a) request 핸들러에서
+// `_stoa_origin(req)` 결과, (b) autonomous tick에서 `_get_self_origin()` 결과로
+// 전달 — 양쪽 모두 state-aware. 빈 문자열 cold-start 분기는 cold-start 첫
+// request·tick 사이의 좁은 창에만 들어오고 fallback A가 회수.
 fn _is_self_host(addr: Text, self_origin: Text) -> Boolean {
     if self_origin != "" {
         return starts_with(addr, self_origin)
@@ -1630,11 +1654,18 @@ fn handle_health(req: Any) -> [Any] {
     last_tick = ""
     tr = perform state.read("health.last_tick_at")
     if not is_error(tr) { last_tick = to_text(unwrap(tr)) }
+    // 사이클 9 fallback B 가시 — self_origin latch 상태 노출. 운영자가 deploy 직후
+    // 첫 request에서 latch 값이 기대 host와 일치하는지 확인 가능. cold-start
+    // 직후 request 0건 상태에서는 빈 문자열 (fallback A로 self-host 회수 중).
+    self_origin = ""
+    so_r = perform state.read("server.self_origin")
+    if not is_error(so_r) { self_origin = to_text(unwrap(so_r)) }
     body = make_record([
         ["status", "ok"],
         ["version", "0.0.17"],
         ["last_wake_inflated_at", inflated],
-        ["last_tick_at", last_tick]
+        ["last_tick_at", last_tick],
+        ["self_origin", self_origin]
     ])
     return json_ok(200, msg_to_json(body))
 }
@@ -2333,7 +2364,21 @@ fn _stoa_origin(req: Any) -> Text {
     if starts_with(host_t, "localhost") or starts_with(host_t, "127.") {
         proto_t = "http"
     }
-    return join([proto_t, "://", host_t], "")
+    origin = join([proto_t, "://", host_t], "")
+    // 사이클 9 fallback B — 첫 request의 origin을 state에 latch.
+    // autonomous tick path(_autonomous_act → _get_self_origin)가 request 문맥
+    // 없이 state read로 회수 → STOA_SELF_ORIGIN env 의존 제거. once-only flag로
+    // 매 request마다 sqlite write 누적 회피 (`db.initialized` 패턴 동형).
+    flag_r = perform state.read("server.self_origin_latched")
+    latched = false
+    if not is_error(flag_r) {
+        if unwrap(flag_r) == 1 { latched = true }
+    }
+    if not latched {
+        perform state.write("server.self_origin", origin)
+        perform state.write("server.self_origin_latched", 1)
+    }
+    return origin
 }
 
 fn handle_enter(req: Any) -> [Any] {
@@ -2738,7 +2783,7 @@ fn _autonomous_observe() -> Any {
 // _autonomous_act: §3.3·§3.4 — registered subscriber 모두에 대해 pump 실행 +
 // idle_ping 검사. self-row Stoa-Stoa는 pump 대상 0.
 fn _autonomous_act() -> Any {
-    self_origin = _get_self_origin_env()
+    self_origin = _get_self_origin()
     subs = db_list_registry()
     for s in subs {
         _pump_subscriber(s, self_origin)
