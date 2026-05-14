@@ -245,6 +245,21 @@ fn _ensure_self_genesis() -> Any {
     return None
 }
 
+// _ensure_db: hotfix v3 (Stoa#12) — process lifetime 동안 _init_db()를 1회만 fire.
+// state flag `db.initialized` 로 cold-start 첫 호출 시 schema 작업 수행 + flag set,
+// 이후 호출은 flag 체크 후 즉시 return. _init_db 자체는 CREATE TABLE IF NOT EXISTS /
+// PRAGMA / ALTER 검사 → 의미적으론 idempotent이지만, 매 핸들러 진입마다 수십 개 SQL이
+// 발사되는 비용이 Railway 메모리 압력 + 응답 지연 누적의 한 source (4차 다운 보드). v3는
+// 모든 핸들러 진입점이 `_ensure_db()`를 호출하도록 일괄 치환 — 1 cold-start당 1회 schema.
+// 명시적 강제 재초기화가 필요한 자리(테스트·migration)는 _init_db()를 직접 호출.
+fn _ensure_db() -> Any {
+    f = perform state.read("db.initialized")
+    if not is_error(f) { if unwrap(f) == 1 { return None } }
+    _init_db()
+    perform state.write("db.initialized", 1)
+    return None
+}
+
 // ---------- ids ----------
 
 fn make_id() -> Text {
@@ -586,7 +601,7 @@ fn _get_signing_phase() -> Number {
 // db_record_seen_nonce: §7.3. PRIMARY KEY (from_name, nonce) 충돌 = is_error로 검출.
 // 호출자가 is_error로 중복(=replay) 판단 후 403.
 fn db_record_seen_nonce(from_name: Text, nonce: Text, seen_at: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     return perform db.execute(db,
         "INSERT INTO seen_nonces (from_name, nonce, seen_at) VALUES (?, ?, ?)",
@@ -743,7 +758,7 @@ fn _row_to_envelope(row: Any) -> Any {
 }
 
 fn db_get_letter(msg_id: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT id, from_name, from_address, content, created_at, signature, nonce FROM letters WHERE id = ? LIMIT 1",
@@ -781,7 +796,7 @@ fn _purge_old_letters() -> Any {
 }
 
 fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
-    _init_db()
+    _ensure_db()
     _purge_old_letters()
     db = get_db_file()
     r = None
@@ -803,7 +818,7 @@ fn db_inbox_for(name: Text, limit: Number, since_id: Text) -> [Any] {
 }
 
 fn db_all_letters(limit: Number, since_id: Text) -> [Any] {
-    _init_db()
+    _ensure_db()
     _purge_old_letters()
     db = get_db_file()
     r = None
@@ -980,7 +995,7 @@ fn get_discord_webhook() -> Text {
 }
 
 fn _is_human_bound(name: Text) -> Boolean {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT 1 FROM discord_users WHERE stoa_name = ? LIMIT 1",
@@ -1025,7 +1040,7 @@ fn notify_discord(envelope: Any) -> Any {
 // 단계에서 해소된다. 예: "에르곤" → "ergon".
 
 fn db_add_alias(alias: Text, canonical: Text, ts: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     return perform db.execute(db,
         "INSERT INTO aliases (alias, canonical, bound_at) VALUES (?, ?, ?)",
@@ -1033,7 +1048,7 @@ fn db_add_alias(alias: Text, canonical: Text, ts: Text) -> Any {
 }
 
 fn db_resolve_alias(name: Text) -> Text {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT canonical FROM aliases WHERE alias = ? ORDER BY rowid DESC LIMIT 1",
@@ -1054,7 +1069,7 @@ fn resolve_name(name: Text) -> Text {
 }
 
 fn db_list_aliases() -> [Any] {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT a.alias, a.canonical, a.bound_at FROM aliases a INNER JOIN (SELECT alias, MAX(rowid) AS m FROM aliases GROUP BY alias) t ON a.rowid = t.m ORDER BY a.alias",
@@ -1070,7 +1085,7 @@ fn db_list_aliases() -> [Any] {
 // ---------- Discord user mapping ----------
 
 fn db_bind_discord(discord_id: Text, stoa_name: Text, ts: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     return perform db.execute(db,
         "INSERT INTO discord_users (discord_id, stoa_name, bound_at) VALUES (?, ?, ?)",
@@ -1078,7 +1093,7 @@ fn db_bind_discord(discord_id: Text, stoa_name: Text, ts: Text) -> Any {
 }
 
 fn db_lookup_discord(discord_id: Text) -> Text {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT stoa_name FROM discord_users WHERE discord_id = ? ORDER BY rowid DESC LIMIT 1",
@@ -1196,7 +1211,7 @@ fn handle_discord(req: Any) -> [Any] {
     }
 
     if cmd == "status" {
-        _init_db()
+        _ensure_db()
         db = get_db_file()
         // 전체 편지 수
         r1 = perform db.query(db, "SELECT COUNT(*) FROM letters", [])
@@ -1265,7 +1280,7 @@ fn handle_discord(req: Any) -> [Any] {
         recipients = [make_record([["name", get(rcp, "name")], ["address", get(rcp, "address")]])]
         msg_id = make_id()
         created_at = now_iso()
-        _init_db()
+        _ensure_db()
         db_insert_letter(msg_id,
             to_text(get(from_obj, "name")),
             to_text(get(from_obj, "address")),
@@ -1351,7 +1366,7 @@ fn handle_debug_discord(req: Any) -> [Any] {
 
 // db_register: public_key는 hex Text 또는 None (grandfather row).
 fn db_register(name: Text, address: Text, public_key: Any, ts: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     return perform db.execute(db,
         "INSERT INTO registry (name, address, public_key, registered_at) VALUES (?, ?, ?, ?)",
@@ -1359,7 +1374,7 @@ fn db_register(name: Text, address: Text, public_key: Any, ts: Text) -> Any {
 }
 
 fn db_lookup(name: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT name, address, public_key, registered_at FROM registry WHERE name = ? ORDER BY rowid DESC LIMIT 1",
@@ -1372,7 +1387,7 @@ fn db_lookup(name: Text) -> Any {
 }
 
 fn db_list_registry() -> [Any] {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT r.name, r.address, r.public_key, r.registered_at FROM registry r INNER JOIN (SELECT name, MAX(rowid) AS m FROM registry GROUP BY name) t ON r.rowid = t.m ORDER BY r.name",
@@ -1392,7 +1407,7 @@ fn db_list_registry() -> [Any] {
 // append-only — INSERT만, latest wins via rowid.
 
 fn db_register_platform_key(id: Text, public_key: Text, ts: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     return perform db.execute(db,
         "INSERT INTO platform_keys (id, public_key, registered_at) VALUES (?, ?, ?)",
@@ -1400,7 +1415,7 @@ fn db_register_platform_key(id: Text, public_key: Text, ts: Text) -> Any {
 }
 
 fn db_get_platform_pubkey(id: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT public_key FROM platform_keys WHERE id = ? ORDER BY rowid DESC LIMIT 1",
@@ -1412,7 +1427,7 @@ fn db_get_platform_pubkey(id: Text) -> Any {
 }
 
 fn db_list_platform_keys() -> [Any] {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT p.id, p.public_key, p.registered_at FROM platform_keys p INNER JOIN (SELECT id, MAX(rowid) AS m FROM platform_keys GROUP BY id) t ON p.rowid = t.m ORDER BY p.id",
@@ -1680,7 +1695,7 @@ fn handle_post_message(req: Any) -> [Any] {
         }
     }
 
-    _init_db()
+    _ensure_db()
     msg_id = make_id()
     // 저장 created_at: 검증 통과한 흐름이면 client 값(서명 round-trip 가능),
     // 그 외에는 server now (legacy / Phase 0).
@@ -2046,7 +2061,7 @@ fn _gen_session_token() -> Any {
 }
 
 fn db_get_password_hash(name: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT password_hash FROM registry WHERE name = ? AND password_hash IS NOT NULL ORDER BY rowid DESC LIMIT 1",
@@ -2061,7 +2076,7 @@ fn db_get_password_hash(name: Text) -> Any {
 
 // db_set_password: append-only — 새 registry row를 latest address로 INSERT, password_hash 포함.
 fn db_set_password(name: Text, password_hash: Text, ts: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     // 기존 latest row의 address/public_key 유지.
     cur = db_lookup(name)
@@ -2080,7 +2095,7 @@ fn db_set_password(name: Text, password_hash: Text, ts: Text) -> Any {
 }
 
 fn db_create_session(token: Text, name: Text, ts: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     return perform db.execute(db,
         "INSERT INTO sessions (token, name, created_at) VALUES (?, ?, ?)",
@@ -2088,7 +2103,7 @@ fn db_create_session(token: Text, name: Text, ts: Text) -> Any {
 }
 
 fn db_lookup_session(token: Text) -> Any {
-    _init_db()
+    _ensure_db()
     db = get_db_file()
     r = perform db.query(db,
         "SELECT name, created_at FROM sessions WHERE token = ? ORDER BY rowid DESC LIMIT 1",
@@ -2519,7 +2534,7 @@ fn _emit_self_letter_body(msg_id: Text, ts: Text, to_name: Text, to_addr: Text, 
 // 차단되지 않게.
 // 반환값은 msg_id Text — 실패 시 빈 문자열 ("")로 굳혀 호출자가 자취 인식.
 fn _emit_self_letter(to_name: Text, to_addr: Text, content: Text) -> Text {
-    _init_db()
+    _ensure_db()
     msg_id = make_id()
     ts = now_iso()
     r = attempt {
@@ -2725,7 +2740,7 @@ fn _autonomous_act() -> Any {
 // on_birth: agentic runtime 첫 부팅 hook. schedule.every 등록 + DB 초기화 + 자기
 // genesis 보장. on_genesis 보다 on_birth가 *항상* 호출 (testament 인계 분기 0).
 fn on_birth() -> Any {
-    _init_db()
+    _ensure_db()
     sec = _get_tick_sec()
     perform schedule.every(sec)
     return None
