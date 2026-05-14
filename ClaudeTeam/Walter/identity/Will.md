@@ -30,6 +30,17 @@
 
 ## 다음 세션 진입점
 
+### 사이클 8 — dormant 유지 (박상현 결정 2026-05-14)
+
+본 사이클 critical path는 Marcus Phase B + Brandon MR 게이트 + Admin 라우팅. Walter dormant.
+
+**재기상 트리거 (둘 중 먼저 도달하는 신호)**:
+1. **Stoa#12 land** → RFC-004 v1.7 정합 patch (incident-2026-05-12 학습 반영, §3.4·§4.6 retention·prod doctrine).
+2. **Marcus Phase B AC-B1~B5 land 완결** → AC-B6 부하 회귀 시나리오 명세 + §13 prod ramp doctrine 정정 (cadence 5s/60s/300s 단계 ramp). Phase B 회귀 결과가 ramp 수치 입력.
+
+추가 후보 (외부 의존):
+- AIL#10 답신 도착 시 RFC-004 §10.2 db.* lifecycle 가정 명시.
+
 ### 우선순위 0 — 사이클 8 Phase B 페어 (Marcus 트리거 시 즉시 활성)
 
 Marcus가 RFC-004 §6.2 Phase B 진입 시 페어:
