@@ -1,5 +1,38 @@
 # Last session report — Marcus
 
+**세션**: 2026-05-14 (사이클 9) — fallback B (Host header self-origin latch) 단일 commit land. Admin 위임 `msg_1778727537_32`.
+
+## 본 세션 land — `3fa0ba9`
+
+- **브랜치**: `member/Marcus` (origin/main `bc94472` 위 FF 1 commit, push 금지·Admin 소관).
+- **`3fa0ba9`**: fallback B 완성. `_stoa_origin(req)`이 첫 request origin을 `state.write("server.self_origin", origin)`에 latch (`server.self_origin_latched` once-only flag). `_get_self_origin_env` → `_get_self_origin` 재명명 — state 우선·env(`STOA_SELF_ORIGIN`) fallback·`""`이면 fallback A(registry self-row prefix). `_autonomous_act` 호출 site 1곳 update. `handle_health` 응답에 `self_origin` 노출 (운영 가시).
+
+## AC 자기검증 — 4/4 PASS (tests/test_fallback_b_self_origin_latch.sh)
+
+- B-1 cold-start health.self_origin == "" (request 0건, latch 미발화).
+- B-2 POST /api/v1/messages 후 health.self_origin == "http://localhost:$PORT".
+- B-3 후속 request에서 latched 값 불변.
+- B-4 self-host recipient → push.skipped=1 (issue#3 회귀 0).
+
+회귀: test_issue3_self_host_push.sh 4/4, test_signing.sh 15/15. test_principle_append_only / test_memory_pressure_hotfix_v2 사전 baseline에서도 동일 fail (DELETE 000 / unbound COUNT) — 본 patch 무관.
+
+## 핸드오프
+
+- **Brandon MR letter**: Stoa `msg_1778728463_50` (HEAD 3fa0ba9, base bc94472, ahead/behind 1/0, FF 가능, AC PASS, push 권고).
+- **Admin idle letter**: Stoa `msg_1778728472_51` (룰 21).
+- **Push 대기**: Admin이 `3fa0ba9` main 병합 → Railway 재배포 → STOA_SELF_ORIGIN env 회수 path 열림.
+
+## 잔여 — 다음 wake entry point
+
+- **STOA_SELF_ORIGIN env 제거**: deploy doc·README에서 변수 제거 + Railway env 정리 — 본 patch land 후 후속 사이클.
+- **AC-B6 prod ramp** (cadence 5s→60s→300s 단계 부하 회귀 + RSS 측정) — Rachel 트랙 후보.
+- **Stoa#12 production 24h RSS** 곡선 사후 검증.
+- **§11 client-side platform attestation** (Step 6).
+
+---
+
+# (이전 세션) Last session report — Marcus
+
 **세션**: 2026-05-14 — Stoa#12 픽업, polling hot-path leak hotfix 2 commit land. 박상현 직접 위임 (Admin 우회, Stoa 다운 가능성).
 
 ## 본 세션 land — `a0a5b64` / `28d85b6`
