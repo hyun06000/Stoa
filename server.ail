@@ -338,6 +338,21 @@ fn _sort_recipients_by_name(recipients: [Any]) -> [Any] {
     return out
 }
 
+// canonical_ack: RFC-004 §6.3 Phase C ack 인증 게이트 서명 대상.
+// 형식: ack|<name>|<up_to_msg_id>|<created_at>|<nonce>
+// _esc 규칙은 RFC-001 §6.1 동형 (backslash 먼저, |;: 후순). 서명 후 envelope
+// 본문에 signature/nonce/created_at trio + body {to:name, up_to_msg_id:...}.
+//
+// Walter msg_48 Q1 회신: "canonical(ack body) 직렬화 후 발신자 pubkey로 verify."
+// 정확한 byte form은 본 commit에서 정의 — Walter C3 spec patch에서 RFC-004
+// §6.3에 박아 정식화 자리.
+fn canonical_ack(name: Text, up_to_msg_id: Text, created_at: Text, nonce: Text) -> Text {
+    return join([
+        "ack|", _esc(name), "|", _esc(up_to_msg_id), "|",
+        _esc(created_at), "|", _esc(nonce)
+    ], "")
+}
+
 // canonical_letter: §6.1 letter 서명 대상 메시지.
 // 형식: letter|<from_name>|<from_address>|<sorted_to>|<content>|<created_at>|<nonce>
 // sorted_to = name lex asc 정렬 후 `<name>:<address>` 들을 `;`로 join.
@@ -1908,6 +1923,28 @@ fn handle_inbox_get(req: Any) -> [Any] {
     return json_ok(200, msg_to_json(body))
 }
 
+// handle_inbox_ack: RFC-004 §4.2 ack 의미론 + §6.3 Phase C 두 path 인증.
+//
+// Walter msg_48 Q1 spec-grounded: 에이전트 ed25519 envelope vs 사람 RFC-002
+// Bearer 토큰. client identity로 path 분리, 둘 중 하나라도 valid 토큰 있으면
+// ack 허용. 둘 다 없으면 401.
+//
+// Phase gating (RFC-004 §4.5):
+//  - Phase A (STOA_SIGNING_PHASE=0, default): grandfather — 무인증 ack 허용.
+//    내부 신뢰 모델, AC-A1~A6 회귀 보존.
+//  - Phase B/C (STOA_SIGNING_PHASE>=1): 아래 두 path 게이트 강제.
+//
+// 우선순위 (Phase >= 1):
+//  (1) signature + nonce + created_at trio in body → ed25519 path.
+//      canonical_ack(name, up_to_msg_id, created_at, nonce) 재구성 →
+//      db_lookup(name).public_key로 crypto_verify_ed25519. 실패 403.
+//      nonce 형식 + window + dedup 게이트 letter signing과 동형.
+//  (2) Authorization: Bearer / X-Session-Token 헤더 → RFC-002 path.
+//      db_lookup_session(token).name == body.to 일치 필요. 미일치 403.
+//  (3) 둘 다 부재 → 401.
+//  (4) 둘 다 있으면 → ed25519 우선 (Walter Q1: "에이전트 자기 키가 더 강한 신원").
+//
+// 인증 통과 후에야 _advance_cursor 호출. 멱등·역행 방지 의미론 그대로.
 fn handle_inbox_ack(req: Any) -> [Any] {
     parsed = parse_json(req.body)
     if is_error(parsed) { return err_json(400, "invalid JSON body") }
@@ -1918,6 +1955,70 @@ fn handle_inbox_ack(req: Any) -> [Any] {
     if is_error(m) { return err_json(400, unwrap_error(m)) }
     name = resolve_name(to_text(unwrap(n)))
     mid = to_text(unwrap(m))
+
+    phase = _get_signing_phase()
+
+    // (1) ed25519 path 시도. trio가 부재해도 Phase A에서는 통과 OK.
+    sig_v = get(body, "signature")
+    nonce_v = get(body, "nonce")
+    ca_v = get(body, "created_at")
+    has_ed25519_claim = sig_v != None and to_text(sig_v) != ""
+
+    // (2) Bearer path 시도.
+    bearer = _bearer_token_from_req(req)
+    has_bearer = bearer != ""
+
+    if phase >= 1 and has_ed25519_claim {
+        // ed25519 path — trio 모두 비공 + 발신자 키로 verify.
+        if nonce_v == None or ca_v == None {
+            return err_json(400, "signature requires nonce + created_at")
+        }
+        signature = to_text(sig_v)
+        nonce = to_text(nonce_v)
+        client_created_at = to_text(ca_v)
+        if signature == "" or nonce == "" or client_created_at == "" {
+            return err_json(400, "signature/nonce/created_at must be non-empty")
+        }
+        if not _nonce_format_ok(nonce) {
+            return err_json(400, "nonce format invalid (lower-case hex, 32+ chars)")
+        }
+        if not _within_window(client_created_at, _get_window_seconds()) {
+            return err_json(403, "created_at out of window")
+        }
+        sender = db_lookup(name)
+        if sender == None {
+            return err_json(403, join(["unknown sender '", name, "' (not in registry)"], ""))
+        }
+        spk_v = get(sender, "public_key")
+        if spk_v == None or to_text(spk_v) == "" {
+            return err_json(403, "sender has no registered public_key")
+        }
+        sender_pk = to_text(spk_v)
+        canon = canonical_ack(name, mid, client_created_at, nonce)
+        if not crypto_verify_ed25519(sender_pk, signature, canon) {
+            return err_json(403, "ack signature verification failed")
+        }
+        rec = db_record_seen_nonce(name, nonce, now_iso())
+        if is_error(rec) {
+            return err_json(403, "nonce already used")
+        }
+    } else {
+        if phase >= 1 {
+            if not has_bearer {
+                return err_json(401, "ack requires signature trio or Authorization: Bearer token")
+            }
+            sess = db_lookup_session(bearer)
+            if sess == None {
+                return err_json(401, "invalid session token")
+            }
+            sess_name = to_text(get(sess, "name"))
+            if sess_name != name {
+                return err_json(403, join(["session token bound to '", sess_name, "', cannot ack for '", name, "'"], ""))
+            }
+        }
+        // phase == 0: grandfather, 통과.
+    }
+
     ts = now_iso()
     new_cur = _advance_cursor(name, mid, ts)
     body_out = make_record([
