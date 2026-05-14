@@ -1,5 +1,52 @@
 # Last session report — Marcus
 
+**세션**: 2026-05-14 (사이클 9, 이어서) — Phase C C1+C2 두 commit land. 박상현 직접 위임 (Walter msg_48 회신 기반).
+
+## 본 세션 land — `02edc01` / `474aa5c`
+
+- **브랜치**: `member/Marcus` (origin/main `c282680` 위 FF 2 commit, push 금지·Admin 소관).
+
+### `02edc01` — Phase C C1: _emit_self_letter ed25519 self-signing
+- `_emit_self_letter`에 nonce(`crypto_random_bytes(16)`) + canonical_letter(RFC-001 §6.1) + crypto_sign_ed25519 흐름 추가. db_insert_letter의 signature/nonce 컬럼 비공.
+- secret 미보유 분기(Railway 재시작) graceful 무서명 fallback — Phase B 동작 보존.
+- **부수 발견: AIL `crypto_keygen_ed25519` 반환 순서 swap**. Phase A `45f500f`의 옛 코드 `pk=kp[0], sk=kp[1]`가 자기서명 path 부재로 표면 0이었음 → C1 AC verify FAIL로 표면화. 정정: `sk=kp[0], pk=kp[1]`. inline 주석에 증거(Python `Ed25519PrivateKey.from_private_bytes(kp[0]).public_key()` == kp[1]).
+
+### `474aa5c` — Phase C C2: /inbox/ack 두 path 인증 게이트
+- `canonical_ack(name, up_to_msg_id, created_at, nonce)` 신설 — RFC-001 §6.1 _esc 동형.
+- `handle_inbox_ack` Phase gating: Phase 0 grandfather, Phase >= 1 게이트 강제.
+- ed25519 path (trio + verify + nonce dedup + window) + Bearer path (session token, name match) + 둘 다 부재 401 + 둘 다 있으면 ed25519 우선.
+
+## AC 자기검증
+
+- tests/test_rfc004_C2.sh 4/4 (signature 비공·verify·tamper 2종).
+- tests/test_rfc004_C1.sh 6/6 (ed25519/Bearer/무인증401/sig403/name_mismatch403/Phase0 grandfather).
+- run_all.sh + STOA_PHASE_A=1 → Phase A AC 8/8 (grandfather 보존).
+- 회귀: fallback_b 4/4, issue3 4/4, signing 15/15, client_signing AC-C1~C3 PASS.
+- 사전 baseline fail (test_discord / test_memory_pressure / test_q1_webui_auth / test_rfc002_section6 / test_inbox_recipient_gate) — 본 patch 무관.
+
+## 핸드오프
+
+- **Brandon MR letter**: Stoa `msg_1778731964_8` (HEAD 474aa5c, base c282680, ahead/behind 2/0, FF, AC PASS, push 권고).
+- **AIL-arche cross-repo letter**: Stoa `msg_1778731986_9` — keygen swap doc/code 정합 결정 요청 (CLAUDE.md D3).
+- **Admin idle letter**: Stoa `msg_1778731996_10` (룰 21).
+- **Walter 후속**: C3 spec patch (RFC-004 §6.3·§7 두 path AC 정식화 + canonical_ack byte form). Marcus 코드 land 후 발사 자리 (Walter msg_48 명시).
+
+## production 영향 (Brandon/Admin 운영 사이클)
+
+신규 genesis만 정확. 기존 Railway 인스턴스 self-row.public_key는 swap된 옛 값 → 외부 검증 mismatch. 회수 path: self-row 재발급 + state flag(`_self_genesis_done`) 리셋. Brandon 합의 후 Admin 진행.
+
+## 잔여 — 다음 wake entry point
+
+- **production self-row 재발급** 사이클 (운영 swap fix 회수).
+- **STOA_SELF_ORIGIN env 제거** (사이클 9 fallback B 후속).
+- **AC-B6 prod ramp** 회귀 (Rachel 트랙).
+- **Stoa#12 production 24h RSS** 사후 검증.
+- **§11 client-side platform attestation** (Step 6).
+
+---
+
+# (이전 세션) Last session report — Marcus
+
 **세션**: 2026-05-14 (사이클 9) — fallback B (Host header self-origin latch) 단일 commit land. Admin 위임 `msg_1778727537_32`.
 
 ## 본 세션 land — `3fa0ba9`
