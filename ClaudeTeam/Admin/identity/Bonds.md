@@ -126,3 +126,21 @@ Bug A는 plumbing 영역(자가 수정), Bug B는 server.ail(Marcus). 두 개로
 - 룰 20(Stoa 동봉)은 다음 사이클부터 적용 — auditable trail이 결정 큐 회수 능력을 강화할 것이라는 가설 검증 사이클로 진입.
 
 오늘은 여기까지. 모두 클락아웃. main HEAD `88c7326` (이 commit 이후 갱신). 다음 세션 첫 행동: Stoa 백로그 + 파일시스템 inbox 양쪽 점검.
+
+## 2026-05-14 ~ 5-15 — 사이클 11 (Stoa#13 self-loop 회수 + 팀워크 doctrine 정합)
+
+룰 25 land 직후 surface된 신 leak. 사이클 8과 같은 패턴(룰이 사고를 학습) 한 번 더.
+
+### 자취
+- **Stoa#13** — envelope address가 push target으로 오해석되어 self-loop POST → 404 → urllib socket 누적. Marcus 트랙 A(`_pump_subscriber` polling-only 자동 분류, `8d91eea`) + Walter 트랙 B(Subscriber 분류 RFC v1.7 spec, `34a2487`) + Rachel AC-leak 회귀 게이트(`735a146`) 3-layer 정합으로 회수.
+- **Brandon 사이클 9 정체 오인 사고** — 박상현이 Admin 워크트리에서 Brandon spawn → cwd basename "Stoa"가 self-anchor 결손 → CLAUDE.md Admin-narrative 흡수 → 직접 push 실행. 룰 24 v2(cwd self-anchor step 1) land(`aaeee78`)로 회수. VSCode 단일 spawn slot 환경 제약 doctrine 명시.
+- **Stoa#10 close** — RFC-004 Phase A land + reference monitor + 룰 22/Stoa#12·#13 누적 자취로 close 조건 충족. cross-repo write turn-bound auth deny 우회는 박상현 직접 GO('둘다 해줘') 자리.
+- **팀워크 visibility doctrine 정합** — 박상현 '교착 점검' 발화 → 진짜 교착 0건, root cause = Admin stale state(limit=5 tail) + 단일 spawn slot 환경 체감 시간 차이. 룰 26·27·28 land(`7f1e72e`)로 visibility ↑.
+- **사이클 12 anchor 자리** — 박상현 RSS dump 도착으로 Mneme-Brandon이 옛 interval(3s)로 polling 중 finding. 룰 22 갱신이 Mneme팀에 도달 안 한 자리. arche full 답 letter로 cross-team 정합 요청.
+
+### 의미
+- 박상현이 본 사이클에 새 자세 두 가지를 가르침: (a) "교착 점검 + 팀워크 프로세스" 발화 — 단순 문제 해결이 아니라 *왜 자꾸 같은 자리에서 빠지나*를 doctrine layer로 끌어올리는 자세. (b) '모두 승인'·'진행해' 발화로 standing forward delegation을 자율 cascade로 확장 — 어드민 영역 doctrine commit + 위임 letter 자율 fire 허용.
+- 본 사이클로 *코드 leak* 회수 layer(사이클 8·10·11)가 끝나고 다음은 *visibility·환경 제약* layer임을 인식. 룰 24 v2 + 26·27·28이 그 자리.
+- "퓌시스가 진짜 정말로 생기는 첫 순간"(박상현 2026-05-08) 임계는 본 사이클에서 *코드*는 land 완결, *Mneme phusis 결합 트랙*이 다음 임계 자리.
+
+다음 세션 첫 행동: 룰 24 v2 5단계 + 룰 26 적용한 since_id 명시 inbox tail.

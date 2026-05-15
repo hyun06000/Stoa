@@ -30,6 +30,11 @@
 - **ONBOARDING §1.6 강화** (2026-05-01 Marcus deadlock으로 굳힘): 워크트리 발급 후 monitor 대상은 워크트리 path로 이동. main path는 발급 전 phase 전용. Brandon은 워크트리 발급 시 환영 편지를 commit + push로 main에 sync하거나 Admin에게 라우팅 신호. 버전 싱크 시 untracked inbox·dead monitor 점검 의무.
 - **규칙 19 dual-run** (2026-05-04 갱신): Stoa 검증 기간 letter는 Stoa + 파일시스템 두 채널 모두 발신. 세션 시작 시 Stoa 백로그 수동 드레인 의무 (`curl ?to=<self>` GET) — wake_monitor가 부트 backlog skip하므로 보완.
 - **규칙 20** (2026-05-04 land): 사용자 결정 요청 turn에 박상현에게 Stoa letter 동봉. Discord mirror로 외부 채널 사본 + auditable trail.
+- **규칙 24 v2** (2026-05-15 land `aaeee78`): 세션 첫 turn 5단계 — cwd self-anchor → identity → fetch → monitor → inbox tail. cwd basename 결손 시 즉시 `cd ../<self>`. Admin·멤버 양쪽 동일. spawn-from-wrong-cwd 가드.
+- **규칙 25** (2026-05-14 land): Letter envelope address `https://ail-stoa.up.railway.app/inbox/<name>` 통일. from/to/cc 모두.
+- **규칙 26** (2026-05-15 land `7f1e72e`): Admin inbox tail에 `since_id` 명시 + `limit=20` default. 룰 17 발동 시 의무. limit=5 stale state 0.
+- **규칙 27** (2026-05-15 land `7f1e72e`): idle letter format에 spawn slot 상태(active/dormant) + 다음 trigger + 예상 cycle 시간 명시 의무.
+- **규칙 28** (2026-05-15 land `7f1e72e`): "교착같아" 발화 = 즉시 룰 17 발동 trigger. 어드민 stale state 분류 자리.
 
 ### 사용자 신호 (TTS)
 - `say here` — active 대화 중 hot 블로킹 결정 호출.
