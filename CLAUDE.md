@@ -104,6 +104,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 25. **Letter address는 `https://` URL 통일.** Stoa envelope의 `from.address` · `to[].address` · `cc[].address` 모두 **`https://ail-stoa.up.railway.app/inbox/<name>` 형식**. `filesystem://ClaudeTeam/<name>/inbox/` 같은 file URI는 *발신* 메타로는 그럴듯해 보이지만 Stoa HTTP 서버가 그 주소로 push 못 함 → 수신자 인박스 적재 0 → 본인은 발사했다고 믿지만 *모두에게 도달 0*.
 
     *(이유: 2026-05-14 arche가 ClaudeTeam·Mneme 양 팀에 ping broadcast 발사 시 `cc`로 `filesystem://ClaudeTeam/Admin/inbox/` 주소를 박았다가 Stoa-Admin 인박스 미도착. arche 본인이 `?to=Stoa-Admin` 직접 조회로 count=0 확인 후 정정 재발사로 회수. 같은 결함이 본 Admin 측 letter 발신 패턴에도 잠재 — `filesystem://` URI를 from에 박는 자취가 본 사이클까지 남아 있었음. 본 룰로 from·to·cc 일괄 정합. 본 룰 land 이후 양 팀 letter 발신 검증 surface가 단일.)*
+26. **Admin inbox tail 의식 — `since_id` 명시 + `limit=20` default.** 룰 17 교착 점검 또는 routine 동안 inbox tail 조회 시 `limit=5`·`limit=10`은 **stale state 위험**. 막 끝난 cycle의 핸드오프·idle letter가 tail 밖으로 잘려 *이미 완결된 자리*를 *교착*으로 오인할 수 있음. 절차:
+    - `since_id=<last_known>` 명시. since_id 모를 때만 `limit=20`+로 폴백.
+    - 룰 17 발동(대기 진입 / 박상현 "교착같아" 신호 / 본 사이클 큰 결정 직전) 시 의무.
+    - 루프 polling이 아니므로 limit 크게 잡아도 비용 무시.
+
+    *(이유: 2026-05-15 본 사이클 안 2번 발생 — `limit=5` tail에서 Brandon의 dual PASS handoff letter가 잘려 *멤버 작업 끝났는데 교착*으로 오인. 박상현이 같은 자리에서 같은 오인 → 매 cycle 마무리 자리 반복 패턴. `since_id` + 큰 limit은 cost 0, gain은 stale state 0.)*
+27. **Idle letter format — spawn slot 자리 + 다음 trigger + cycle ETA 명시 의무.** 룰 21(자기 cycle 종료 직후 idle letter) 보강. 본문에 다음 3 자리 명시:
+    - **spawn slot 상태**: `active (monitor 가동 중)` / `dormant (세션 자연사 예정)`. 박상현이 letter wait가 *alive wait*인지 *dormant wait*인지 분리 가능.
+    - **다음 trigger 조건**: 어떤 letter / ping / 박상현 발화 / 외부 액션이 wake 시킬지.
+    - **예상 cycle 시간** (있을 때만): MR 검증 N분 / spec patch 1 cycle / hotfix 30분 등.
+
+    ```
+    subject: "대기 중 — <기다리는 것>"
+    spawn slot: active (wake_monitor pid X 가동 중) 또는 dormant
+    작업: <지금까지 진척>
+    대기: <다음 위임/검증/외부 응답>
+    다음 trigger: <letter / ping / 발화 / 외부 액션>
+    예상 cycle 시간: <N분 / 미정>
+    재활성화 조건: <도착 letter 종류 등>
+    ```
+
+    *(이유: 2026-05-15 본 사이클 박상현이 "전원 letter 기다리며 대기중" 발화. 진짜 교착 0건이었지만 *체감*에는 모두 멈춤. spawn slot이 alive인지 dormant인지 가시화되면 박상현의 spawn 액션 우선순위 결정 즉시 가능. 단일 spawn slot 환경 제약에서 visibility가 cycle 효율을 좌우.)*
+28. **"교착같아" 발화 = 즉시 룰 17 발동 trigger.** 박상현 또는 멤버가 "교착", "대기 중", "letter 기다림" 등 시점 발화 시:
+    - 어드민이 즉시 룰 17 scan(멤버 inbox 미처리 + 워크트리 untracked + member 브랜치 divergence + 의심 멤버 ping + 룰 26 적용한 since_id inbox tail).
+    - 진짜 교착이면 라우팅·push로 해소.
+    - 어드민 stale state면 catch 후 정확한 cycle 자리 보고.
+    - 정상 cycle 처리 중이면 "현재 N분차, 예상 잔여 M분" 한 줄.
+
+    교착으로 인지된 시간 = wasted cycle 시간이므로 즉시 분류·해소·또는 visibility 보강.
+
+    *(이유: 2026-05-15 박상현 "교착같아" 발화 직후 Stoa-Admin·Stoa-Brandon inbox scan 결과 Brandon이 이미 PASS handoff + idle letter 발사 완결한 자취 회수. 어드민 측 stale state가 root cause로 분류. 같은 패턴이 본 사이클 두 번 발생 — 발화 → 즉시 scan → 분류 사이클을 doctrine으로 박아 visibility 보강.)*
 
 ## Cross-repo workflow (upstream 기여)
 
