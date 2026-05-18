@@ -55,12 +55,12 @@ for i in 1 2 3; do
         -d "{\"from\":{\"name\":\"alice\",\"address\":\"$URL/inbox/alice\"},\"to\":[{\"name\":\"bob\",\"address\":\"$URL/inbox/bob\"}],\"content\":\"diag test letter $i\"}" >/dev/null
 done
 
-# D-1: GET /api/v1/diag → 200 + 구조.
+# D-1: GET /api/v1/diag → 200 + 구조 (7 top-level key, python_heap 포함).
 DIAG=$(curl -fs "$URL/api/v1/diag")
 STATUS=$(echo "$DIAG" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status",""))')
-HAS_KEYS=$(echo "$DIAG" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(all(k in d for k in ["status","sampled_at","process","db","state","server"]))')
+HAS_KEYS=$(echo "$DIAG" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(all(k in d for k in ["status","sampled_at","process","db","state","server","python_heap"]))')
 if [ "$STATUS" = "ok" ] && [ "$HAS_KEYS" = "True" ]; then
-    report_pass "D-1 GET /api/v1/diag 200 + JSON 구조 정합 (6 top-level key)"
+    report_pass "D-1 GET /api/v1/diag 200 + JSON 구조 정합 (7 top-level key, python_heap 포함)"
 else
     report_fail "D-1 status='$STATUS' has_keys='$HAS_KEYS' diag='$DIAG'"
 fi
@@ -111,6 +111,32 @@ else
     else
         report_fail "D-5 ($OS) 예상 false이나 $PROC_AVAIL"
     fi
+fi
+
+# D-6: python_heap layer — AIL v1.75.0+ diag.* substrate (Stoa#14-3).
+PY_HEAP=$(echo "$DIAG" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin).get("python_heap",{})))')
+GC_LEN=$(echo "$PY_HEAP" | python3 -c 'import sys,json; print(len(json.load(sys.stdin).get("gc_count",[])))')
+OBJ=$(echo "$PY_HEAP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("objects_count",0))')
+TH=$(echo "$PY_HEAP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("thread_count",0))')
+if [ "$GC_LEN" = "3" ] && [ "$OBJ" -gt "0" ] && [ "$TH" -gt "0" ]; then
+    report_pass "D-6 python_heap.gc_count[3] + objects=$OBJ + threads=$TH (diag.* substrate 작동)"
+else
+    report_fail "D-6 python_heap mismatch: gc_len=$GC_LEN objects=$OBJ threads=$TH"
+fi
+
+# D-7: tracemalloc — on_birth start 후 snapshot 자취.
+TM_TOP=$(echo "$PY_HEAP" | python3 -c 'import sys,json; print(len(json.load(sys.stdin).get("tracemalloc_top10",[])))')
+TM_AVAIL=$(echo "$PY_HEAP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tracemalloc_available",False))')
+if [ "$TM_TOP" -ge "1" ] && [ "$TM_AVAIL" = "True" ]; then
+    # 첫 entry shape — file/line/size_kb/count 키 존재.
+    HAS_SHAPE=$(echo "$PY_HEAP" | python3 -c 'import sys,json; e=json.load(sys.stdin)["tracemalloc_top10"][0]; print(all(k in e for k in ["file","line","size_kb","count"]))')
+    if [ "$HAS_SHAPE" = "True" ]; then
+        report_pass "D-7 tracemalloc_top10 $TM_TOP entry + shape 정합 (file/line/size_kb/count)"
+    else
+        report_fail "D-7 tracemalloc entry shape mismatch"
+    fi
+else
+    report_fail "D-7 tracemalloc_top10 빈 list (start 미발화? on_birth 자취 결손)"
 fi
 
 echo ""

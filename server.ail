@@ -1863,13 +1863,43 @@ fn handle_diag(req: Any) -> [Any] {
     server_rec = make_record([
         ["self_origin", self_origin]
     ])
+    // 5. Python heap layer (Stoa#14-3 — arche diag.* substrate, AIL v1.75.0+).
+    // RSS +1.3 GB/hr 자취 + DB layer reject (가설 E 완전 reject) 후 Python heap·
+    // evolve runtime·malloc arena 자리로 leak source 좁히는 surface. 옛 AIL에서
+    // 효과 부재 → attempt+try가 perform 예외 흡수 → graceful empty fallback.
+    // perform diag.* 는 Result wrapping이라 unwrap 안 거치면 record가 json에 박힘.
+    gc_list = attempt {
+        try unwrap(perform diag.gc_count())
+        try [0, 0, 0]
+    }
+    obj_count = attempt {
+        try unwrap(perform diag.object_count())
+        try 0
+    }
+    th_count = attempt {
+        try unwrap(perform diag.thread_count())
+        try 0
+    }
+    tm_top = attempt {
+        try unwrap(perform diag.tracemalloc_snapshot(10))
+        try []
+    }
+    tm_available = length(tm_top) > 0
+    python_heap_rec = make_record([
+        ["gc_count", gc_list],
+        ["objects_count", obj_count],
+        ["thread_count", th_count],
+        ["tracemalloc_top10", tm_top],
+        ["tracemalloc_available", tm_available]
+    ])
     body = make_record([
         ["status", "ok"],
         ["sampled_at", now_iso()],
         ["process", process_rec],
         ["db", db_rec],
         ["state", state_rec],
-        ["server", server_rec]
+        ["server", server_rec],
+        ["python_heap", python_heap_rec]
     ])
     return json_ok(200, msg_to_json(body))
 }
@@ -3185,6 +3215,15 @@ fn on_birth() -> Any {
     _ensure_db()
     sec = _get_tick_sec()
     perform schedule.every(sec)
+    // Stoa#14-3: tracemalloc 진단 boot (AIL v1.75.0+ `diag.*` substrate).
+    // frames=20 — alloc traceback 깊이 (CPython convention, arche letter
+    // msg_1779082983_21). 비용 ~3x memory overhead on alloc — RSS +1.3 GB/hr
+    // 누수 진단 cycle 한정 인정 자리. idempotent (이미 가동 중이면 no-op).
+    // 효과 부재(옛 AIL)에서는 perform 예외 → attempt+try가 흡수해 graceful skip.
+    attempt {
+        try perform diag.tracemalloc_start(20)
+        try None
+    }
     return None
 }
 
@@ -3217,7 +3256,7 @@ fn on_tick(state: Any) -> Any {
 
 evolve stoa {
     listen: 8090
-    effects: [http.respond, http.post_json, db.execute, db.query, clock.now, state.read, state.write, state.has, state.list_keys, env.read, schedule.every, file.read]
+    effects: [http.respond, http.post_json, db.execute, db.query, clock.now, state.read, state.write, state.has, state.list_keys, env.read, schedule.every, file.read, diag.gc_count, diag.object_count, diag.thread_count, diag.tracemalloc_start, diag.tracemalloc_stop, diag.tracemalloc_snapshot]
     metric: error_rate
     when request_received(req) {
         result = route(req)
