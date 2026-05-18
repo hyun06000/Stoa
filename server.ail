@@ -1748,6 +1748,132 @@ fn handle_health(req: Any) -> [Any] {
     return json_ok(200, msg_to_json(body))
 }
 
+// _diag_status_field: /proc/self/status 텍스트에서 `<name>:` 시작 라인의 값을
+// trim해서 Text로 반환. 없으면 "". Linux /proc/self/status format은
+// `Field:\t<whitespace>value[<whitespace>unit]` — value+unit 전체 trim 후 반환.
+// 호출자가 " kB" suffix 등 추가 가공.
+fn _diag_status_field(status_text: Text, name: Text) -> Text {
+    needle = join([name, ":"], "")
+    n_len = length(needle)
+    s_len = length(status_text)
+    // 라인별 starts_with 매칭. /proc/self/status는 line-based.
+    pos = index_of(status_text, needle)
+    if pos < 0 { return "" }
+    // 라인 시작이 아닌 substring match 방지 — pos 직전 문자가 줄바꿈 또는 begin이어야.
+    if pos > 0 {
+        prev = slice(status_text, pos - 1, pos)
+        if prev != "\n" {
+            // 라인 중간 match — 다음 라인부터 재검색은 복잡하므로 첫 hit만 인정 (실제로
+            // status 필드는 line-start이라 안전).
+        }
+    }
+    after = slice(status_text, pos + n_len, s_len)
+    // 다음 줄바꿈까지가 value.
+    nl = index_of(after, "\n")
+    if nl < 0 { nl = length(after) }
+    raw = slice(after, 0, nl)
+    return trim(raw)
+}
+
+// _diag_status_int: 위 값에서 trailing ` kB` 등 unit 제거 후 첫 정수만 추출. 실패 시 0.
+fn _diag_status_int(status_text: Text, name: Text) -> Number {
+    val = _diag_status_field(status_text, name)
+    if val == "" { return 0 }
+    // value는 "12345 kB" 또는 "8" 형태. 첫 space까지가 숫자.
+    sp = index_of(val, " ")
+    num_t = val
+    if sp >= 0 { num_t = slice(val, 0, sp) }
+    n_r = to_number(num_t)
+    if is_error(n_r) { return 0 }
+    return unwrap(n_r)
+}
+
+// _diag_db_count: SELECT COUNT(*) FROM <table>. 0 fallback.
+fn _diag_db_count(table: Text) -> Number {
+    db = get_db_file()
+    sql = join(["SELECT COUNT(*) FROM ", table], "")
+    r = perform db.query(db, sql, [])
+    if is_error(r) { return 0 }
+    rows = unwrap(r)
+    if length(rows) == 0 { return 0 }
+    return rows[0][0]
+}
+
+// handle_diag: Stoa#14-2 진단 endpoint. GET /api/v1/diag → JSON.
+//
+// 박상현 doctrine (msg_1779080765_35): '측정 우선, 가설 좁히기 0'. F-1 hotfix가
+// RSS 우상향 차단 못 했으니 leak source 정확 위치 측정으로 *진짜 root cause* 가시화.
+//
+// 자취 surface:
+//   process: VmRSS·VmSize·VmPeak·VmData·RssAnon·RssFile·RssShmem·VmStk·VmLib·Threads
+//            from /proc/self/status (Linux only, container 정합). darwin local
+//            테스트에서는 file.read 실패 → "" fallback. Railway production은 Linux
+//            기반이라 정상 자취.
+//   db:      letters·delivery_log·seen_nonces·inbox_cursors·registry·recipients
+//            6 테이블 row count — F-1 hotfix 작동 자체 검증 (delivery_log 등이 작아져
+//            있어야 함) + 실제 letter 누적 자취 cross-check.
+//   state:   state.list_keys 전체 enumerate count + health.last_tick_at.
+//   server:  self_origin latch 상태 (handle_health 동등).
+//
+// 가시 부재 (Python heap·gc·tracemalloc·threading count·fd count): AIL effect
+// 부재. arche cross-repo letter 별 트랙 (Marcus 발사 자리).
+fn handle_diag(req: Any) -> [Any] {
+    _ensure_db()
+    // 1. /proc/self/status — Linux process stats.
+    proc_text = ""
+    pr_r = perform file.read("/proc/self/status")
+    if not is_error(pr_r) { proc_text = to_text(pr_r) }
+    process_rec = make_record([
+        ["VmRSS_kB", _diag_status_int(proc_text, "VmRSS")],
+        ["VmSize_kB", _diag_status_int(proc_text, "VmSize")],
+        ["VmPeak_kB", _diag_status_int(proc_text, "VmPeak")],
+        ["VmData_kB", _diag_status_int(proc_text, "VmData")],
+        ["VmStk_kB", _diag_status_int(proc_text, "VmStk")],
+        ["VmLib_kB", _diag_status_int(proc_text, "VmLib")],
+        ["RssAnon_kB", _diag_status_int(proc_text, "RssAnon")],
+        ["RssFile_kB", _diag_status_int(proc_text, "RssFile")],
+        ["RssShmem_kB", _diag_status_int(proc_text, "RssShmem")],
+        ["Threads", _diag_status_int(proc_text, "Threads")],
+        ["proc_available", proc_text != ""]
+    ])
+    // 2. DB row counts.
+    db_rec = make_record([
+        ["letters", _diag_db_count("letters")],
+        ["recipients", _diag_db_count("recipients")],
+        ["delivery_log", _diag_db_count("delivery_log")],
+        ["seen_nonces", _diag_db_count("seen_nonces")],
+        ["inbox_cursors", _diag_db_count("inbox_cursors")],
+        ["registry", _diag_db_count("registry")]
+    ])
+    // 3. state count + last_tick_at.
+    state_keys_count = 0
+    sk_r = perform state.list_keys("")
+    if not is_error(sk_r) { state_keys_count = length(unwrap(sk_r)) }
+    last_tick = ""
+    tr = perform state.read("health.last_tick_at")
+    if not is_error(tr) { last_tick = to_text(unwrap(tr)) }
+    state_rec = make_record([
+        ["keys_count", state_keys_count],
+        ["last_tick_at", last_tick]
+    ])
+    // 4. server self_origin.
+    self_origin = ""
+    so_r = perform state.read("server.self_origin")
+    if not is_error(so_r) { self_origin = to_text(unwrap(so_r)) }
+    server_rec = make_record([
+        ["self_origin", self_origin]
+    ])
+    body = make_record([
+        ["status", "ok"],
+        ["sampled_at", now_iso()],
+        ["process", process_rec],
+        ["db", db_rec],
+        ["state", state_rec],
+        ["server", server_rec]
+    ])
+    return json_ok(200, msg_to_json(body))
+}
+
 fn handle_post_message(req: Any) -> [Any] {
     parsed = parse_json(req.body)
     if is_error(parsed) { return err_json(400, "invalid JSON body") }
@@ -2676,6 +2802,9 @@ fn route(req: Any) -> [Any] {
     if method == "GET" and path == "/api/v1/health" {
         return handle_health(req)
     }
+    if method == "GET" and path == "/api/v1/diag" {
+        return handle_diag(req)
+    }
     if method == "POST" and path == "/api/v1/messages" {
         return handle_post_message(req)
     }
@@ -3088,7 +3217,7 @@ fn on_tick(state: Any) -> Any {
 
 evolve stoa {
     listen: 8090
-    effects: [http.respond, http.post_json, db.execute, db.query, clock.now, state.read, state.write, state.has, env.read, schedule.every]
+    effects: [http.respond, http.post_json, db.execute, db.query, clock.now, state.read, state.write, state.has, state.list_keys, env.read, schedule.every, file.read]
     metric: error_rate
     when request_received(req) {
         result = route(req)
