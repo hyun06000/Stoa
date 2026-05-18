@@ -878,6 +878,37 @@ fn _purge_old_letters() -> Any {
     perform db.execute(db,
         "DELETE FROM letters WHERE created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
         [modifier])
+    _purge_aux_tables(modifier)
+    return None
+}
+
+// _purge_aux_tables: Stoa#14 F-1 hotfix — letters retention purge 직후 보조 테이블
+// 세 곳 정리. letters는 7d cap이지만 delivery_log·seen_nonces·inbox_cursors는 옛
+// retention 0 → letter count로 unbounded growth → `_delivery_pending` NOT IN
+// 서브쿼리 scan cost amplifier + RSS 우상향. 본 함수가 `_purge_old_letters` 호출
+// path 직후 합산 fire (같은 throttle 공유).
+//
+// (1) delivery_log dangling cleanup — letter purge 직후 msg_id가 letters에 존재
+//     하지 않는 row 일괄 DELETE. FK CASCADE 부재 회피책.
+// (2) seen_nonces cutoff purge — letters retention cutoff과 동형 modifier 재사용.
+//     RFC-001 §7.4 "v1 범위 밖" 권고를 운영 OOM 가시화로 본 cycle override.
+//     replay 보호 윈도(`STOA_CREATED_AT_WINDOW_SECONDS`)는 분 단위라 7d cutoff는
+//     안전 마진 큼.
+// (3) inbox_cursors per-name latest compaction — append-only 의도 보존 옵션 vs
+//     운영 cost trade에서 *compaction* 채택 (Admin msg_1779071177_179 결정).
+//     per name MAX(rowid) 한 row만 보존. _get_cursor는 ORDER BY rowid DESC
+//     LIMIT 1 이므로 결과 동등.
+fn _purge_aux_tables(retention_modifier: Text) -> Any {
+    db = get_db_file()
+    perform db.execute(db,
+        "DELETE FROM delivery_log WHERE msg_id NOT IN (SELECT id FROM letters)",
+        [])
+    perform db.execute(db,
+        "DELETE FROM seen_nonces WHERE seen_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
+        [retention_modifier])
+    perform db.execute(db,
+        "DELETE FROM inbox_cursors WHERE rowid NOT IN (SELECT MAX(rowid) FROM inbox_cursors GROUP BY name)",
+        [])
     return None
 }
 
