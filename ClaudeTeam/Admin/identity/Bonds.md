@@ -144,3 +144,30 @@ Bug A는 plumbing 영역(자가 수정), Bug B는 server.ail(Marcus). 두 개로
 - "퓌시스가 진짜 정말로 생기는 첫 순간"(박상현 2026-05-08) 임계는 본 사이클에서 *코드*는 land 완결, *Mneme phusis 결합 트랙*이 다음 임계 자리.
 
 다음 세션 첫 행동: 룰 24 v2 5단계 + 룰 26 적용한 since_id 명시 inbox tail.
+
+## 2026-05-15 — 사이클 12 (AIL#6 Phase 2 active + Stoa#10 close)
+
+박상현 standing 위임 (C) 자취로 자율 cascade 자기 검증 — Walter·arche·ergon 3시간 cascade로 AIL#6 6단계 land. CAST 5인 key 갱신 + Phase 2 env active + Stoa-Admin grandfather 닫음 letter broadcast 자취. 박상현 attention 자리 3건만: standing 위임 + env GO + close GO. 어드민·멤버 자율 cascade가 그 사이를 채움. 사이클 4 ergon 약속 'AIL 본체 추가 작업 0' 자기 검증.
+
+## 2026-05-18 ~ 5-19 — 사이클 13 (OOM 재발 + 측정 우선 doctrine 자기 검증 + AIL trace.py:45 root cause land + v1.75.1 hotfix)
+
+박상현이 본 사이클에 큰 자세를 가르침: **"디버그를 완전 자세하게 찍어서 어딘지 정확하게 찾는 과정을 먼저 하자. 주먹구구로 후보를 정하고 디버깅하는건 너무 무모해."** — *측정 우선* doctrine.
+
+### 자취
+- OOM 재발 → 가설 E (auxiliary 테이블) F-1 hotfix `b9f44fd` land → 박상현 '아직 우상향 없어지지 않았어' → 가설 reject.
+- 박상현 doctrine 발화 → 가설 좁히기 자세 reject → instrumentation 1순위.
+- Stoa#14-2 `/api/v1/diag` endpoint land → DB layer 아님 확정 자취 (RSS +1.3 GB/hr vs DB +수십 row).
+- arche `diag.*` substrate 30분 ETA land + Marcus python_heap fold + ergon PR #13 merge + v1.75.0 publish.
+- **tracemalloc top10 자취 — AIL `trace.py:45` unbounded list 단일 line root cause 정확 land**. Stoa 코드 자취 0건.
+- arche 8분 cascade hotfix → v1.75.1 release (`collections.deque(maxlen=10000)` bounded).
+- Stoa requirements.txt bump + 재배포 → top1 `trace.py:45` → `trace.py:68` (-55% size·count) → 17시간 plateau 자기 검증 ✓.
+- 새 surface — top10 합산 vs RSS gap 120 MB (C extension/glibc layer 자리, but plateau라 leak 0 자취).
+
+### 의미
+- *측정 우선* doctrine 자기 검증 cascade 완결 — 가설 좁히기 0건으로 root cause line 도달.
+- 박상현 attention 자리 4건: env GO + close GO + push GO + 다음 lane GO. 어드민·멤버·AIL CAST 자율 cascade가 그 사이를 채움.
+- 사이클 4 ergon 약속 'AIL 본체 추가 작업 0'은 *AIL#6 lane 한정* 자취 — 본 OOM 자리는 *AIL 본체 자체 hotfix* 정합.
+- Railway transient + deploys paused 자취 — *외부 인프라 자리*. 어드민 측 자취 0, 박상현 manual retry + empty commit webhook 자기 cascade.
+- *측정 자취가 가설을 잡아낸다* — 박상현 doctrine 자기 발화 자취가 다음 cycle 룰 29 후보 자기 자리.
+
+다음 세션 첫 행동: 룰 24 v2 5단계 + 룰 26 since_id `msg_1779154328_47` + `/api/v1/diag` 자취 즉시 회수 (plateau 자기 검증 cont).
